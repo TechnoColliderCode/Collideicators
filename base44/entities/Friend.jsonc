@@ -1,0 +1,32 @@
+{
+  "name": "Friend",
+  "type": "object",
+  "properties": {
+    "requester_id": {
+      "type": "string"
+    },
+    "requester_name": {
+      "type": "string"
+    },
+    "target_id": {
+      "type": "string"
+    },
+    "target_name": {
+      "type": "string"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "pending",
+        "accepted",
+        "declined"
+      ],
+      "default": "pending"
+    }
+  },
+  "required": [
+    "requester_id",
+    "target_id",
+    "status"
+  ]
+}
