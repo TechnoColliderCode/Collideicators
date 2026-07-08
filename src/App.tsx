@@ -1,4 +1,4 @@
-import { useMemo, useState, useSyncExternalStore } from "react";
+import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { CallPlaceholder } from "./components/calls/CallPlaceholder";
 import { MessageArea } from "./components/chat/MessageArea";
 import { FriendsView } from "./components/friends/FriendsView";
@@ -8,6 +8,7 @@ import { CreateServerModal } from "./components/modals/CreateServerModal";
 import { NewChatModal } from "./components/modals/NewChatModal";
 import { RightSidebar } from "./components/utilities/RightSidebar";
 import { localStore } from "./data/localStore";
+import { useGlobalShortcuts } from "./hooks/useGlobalShortcuts";
 import type { ChatTarget, Conversation, User } from "./types";
 import { getConversationName } from "./utils/conversation";
 
@@ -24,6 +25,7 @@ function App() {
   const [rightTab, setRightTab] = useState<"notifications" | "calendar" | null>(null);
   const [callTitle, setCallTitle] = useState<string | null>(null);
   const [announcement, setAnnouncement] = useState("");
+  const mainRef = useRef<HTMLElement | null>(null);
 
   const snapshot = useSyncExternalStore(
     localStore.subscribe,
@@ -94,6 +96,23 @@ function App() {
       .toLowerCase()
       .includes(searchQuery.toLowerCase()),
   );
+
+  const focusTarget = (selector: string) => {
+    const element = document.querySelector<HTMLElement>(selector);
+    element?.focus();
+  };
+
+  useGlobalShortcuts({
+    onFocusServers: () => focusTarget('[data-focus-target="servers"] [tabindex="0"]'),
+    onFocusSidebar: () => focusTarget('[data-focus-target="sidebar"] [tabindex="0"], .wide-action'),
+    onFocusMessages: () => focusTarget('[data-focus-target="messages"] [tabindex="0"], [data-focus-target="messages"]'),
+    onFocusComposer: () => focusTarget('[data-focus-target="composer"]'),
+    onFocusUtilities: () => focusTarget('[data-focus-target="utilities"] button'),
+  });
+
+  useEffect(() => {
+    mainRef.current?.focus();
+  }, [activeChannelId, activeConversationId, callTitle, showFriends]);
 
   const selectServer = (serverId: string) => {
     const serverChannels = localStore.getChannels(serverId);
@@ -203,6 +222,10 @@ function App() {
       <div className="sr-only" aria-live="polite">
         {announcement}
       </div>
+      <div id="keyboard-shortcuts" className="sr-only">
+        Keyboard shortcuts: Control Alt 1 moves to servers. Control Alt 2 moves to chats or channels.
+        Control Alt 3 moves to messages. Control Alt 4 moves to utilities. Control Alt M moves to the message composer.
+      </div>
 
       <ServerBar
         servers={servers}
@@ -234,7 +257,13 @@ function App() {
           onNewChat={() => setShowNewChat(true)}
         />
 
-        <main id="main-content" className="main-panel" tabIndex={-1}>
+        <main
+          ref={mainRef}
+          id="main-content"
+          className="main-panel"
+          tabIndex={-1}
+          aria-describedby="keyboard-shortcuts"
+        >
           {callTitle ? (
             <CallPlaceholder title={callTitle} onEnd={() => setCallTitle(null)} />
           ) : showFriends ? (

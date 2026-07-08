@@ -1,4 +1,6 @@
 import { Hash, Headphones, Plus, Search, UserPlus, Users } from "lucide-react";
+import { useMemo } from "react";
+import { useRovingFocus } from "../../hooks/useRovingFocus";
 import type { Channel, Conversation, User } from "../../types";
 import { getConversationName } from "../../utils/conversation";
 import { relativeTime } from "../../utils/date";
@@ -93,17 +95,30 @@ function ChannelList({
   activeId: string | null;
   onSelectChannel: (channelId: string) => void;
 }) {
+  const ids = useMemo(() => channels.map((channel) => channel.id), [channels]);
+  const { getItemProps } = useRovingFocus({
+    ids,
+    selectedId: activeId,
+    orientation: "vertical",
+    onActivate: onSelectChannel,
+  });
+
   return (
-    <section aria-labelledby="channels-heading">
+    <section aria-labelledby="channels-heading" data-focus-target="sidebar">
       <h3 id="channels-heading" className="section-label">
         Channels
       </h3>
+      <p id="channels-help" className="sr-only">
+        Use Up and Down Arrow to move between channels. Press Enter to open the focused channel.
+      </p>
       {channels.map((channel) => (
         <button
+          {...getItemProps(channel.id)}
           key={channel.id}
           type="button"
           className={`list-item ${activeId === channel.id ? "selected" : ""}`}
           aria-current={activeId === channel.id ? "page" : undefined}
+          aria-describedby="channels-help"
           onClick={() => onSelectChannel(channel.id)}
         >
           {channel.type === "voice" ? (
@@ -136,16 +151,33 @@ function ConversationList({
   onSelectConversation: (conversationId: string) => void;
   onNewChat: () => void;
 }) {
+  const ids = useMemo(() => conversations.map((conversation) => conversation.id), [conversations]);
+  const { getItemProps } = useRovingFocus({
+    ids,
+    selectedId: activeId,
+    orientation: "vertical",
+    onActivate: onSelectConversation,
+  });
+
   return (
-    <section aria-labelledby="conversations-heading">
+    <section aria-labelledby="conversations-heading" data-focus-target="sidebar">
       <div className="sidebar-title-row">
         <h3 id="conversations-heading" className="section-label">
           Conversations
         </h3>
-        <button type="button" className="icon-button" aria-label="Start a new conversation" onClick={onNewChat}>
+        <button
+          type="button"
+          className="icon-button"
+          aria-label="Start a new conversation"
+          aria-haspopup="dialog"
+          onClick={onNewChat}
+        >
           <Plus aria-hidden="true" size={16} />
         </button>
       </div>
+      <p id="conversations-help" className="sr-only">
+        Use Up and Down Arrow to move between conversations. Press Enter to open the focused conversation.
+      </p>
       {conversations.length === 0 ? (
         <p className="empty-note">No conversations yet.</p>
       ) : (
@@ -153,10 +185,12 @@ function ConversationList({
           const name = getConversationName(conversation, currentUser.id);
           return (
             <button
+              {...getItemProps(conversation.id)}
               key={conversation.id}
               type="button"
               className={`conversation-item ${activeId === conversation.id ? "selected" : ""}`}
               aria-current={activeId === conversation.id ? "page" : undefined}
+              aria-describedby="conversations-help"
               onClick={() => onSelectConversation(conversation.id)}
             >
               <span className="avatar" aria-hidden="true">

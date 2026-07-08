@@ -6,8 +6,9 @@ import {
   Send,
   Video,
 } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { ChangeEvent } from "react";
+import { useRovingFocus } from "../../hooks/useRovingFocus";
 import type { Message } from "../../types";
 import { MessageBubble } from "./MessageBubble";
 
@@ -31,6 +32,13 @@ export function MessageArea({
   const [text, setText] = useState("");
   const bottomRef = useRef<HTMLDivElement | null>(null);
   const inputRef = useRef<HTMLTextAreaElement | null>(null);
+  const messageIds = useMemo(() => messages.map((message) => message.id), [messages]);
+  const { getItemProps } = useRovingFocus({
+    ids: messageIds,
+    selectedId: messageIds[messageIds.length - 1],
+    orientation: "vertical",
+    loop: false,
+  });
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ block: "end" });
@@ -82,7 +90,22 @@ export function MessageArea({
         )}
       </header>
 
-      <div className="message-list" role="log" aria-live="polite" aria-label={chatTitle ? `${chatTitle} messages` : "Messages"}>
+      <div
+        className="message-list"
+        role="log"
+        aria-live="polite"
+        aria-relevant="additions text"
+        aria-atomic="false"
+        aria-label={chatTitle ? `${chatTitle} messages` : "Messages"}
+        aria-describedby={messages.length > 0 ? "message-list-help" : undefined}
+        tabIndex={messages.length === 0 ? 0 : undefined}
+        data-focus-target="messages"
+      >
+        {messages.length > 0 && (
+          <p id="message-list-help" className="sr-only">
+            Use Up and Down Arrow to move between messages. Press End for the newest message.
+          </p>
+        )}
         {!chatTitle ? (
           <div className="empty-state">
             <MessageCircle aria-hidden="true" size={42} />
@@ -98,6 +121,7 @@ export function MessageArea({
             const previous = messages[index - 1];
             return (
               <MessageBubble
+                {...getItemProps(message.id)}
                 key={message.id}
                 message={message}
                 isMine={message.senderId === currentUserId}
@@ -138,6 +162,7 @@ export function MessageArea({
             }}
             rows={1}
             placeholder={`Message ${chatTitle}`}
+            data-focus-target="composer"
           />
           <button type="submit" className="send-button" disabled={!text.trim()} aria-label="Send message">
             <Send aria-hidden="true" size={18} />

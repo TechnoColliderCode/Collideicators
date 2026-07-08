@@ -1,5 +1,6 @@
 import { Check, Search, UserPlus, X } from "lucide-react";
-import { useState } from "react";
+import { useMemo, useState } from "react";
+import { useRovingFocus } from "../../hooks/useRovingFocus";
 import type { Friend, User } from "../../types";
 
 interface FriendsViewProps {
@@ -45,6 +46,23 @@ export function FriendsView({
   });
 
   const visibleFriends = tab === "online" ? onlineFriends : tab === "all" ? accepted : pending;
+  const tabs = useMemo(
+    () => [
+      { id: "online", label: "Online", count: onlineFriends.length },
+      { id: "all", label: "All", count: accepted.length },
+      { id: "pending", label: "Pending", count: pending.length },
+      { id: "add", label: "Add Friend", count: 0 },
+    ],
+    [accepted.length, onlineFriends.length, pending.length],
+  );
+  const { getItemProps } = useRovingFocus({
+    ids: tabs.map((item) => item.id),
+    selectedId: tab,
+    orientation: "horizontal",
+    activateOnFocus: true,
+    onActivate: (id) => setTab(id as typeof tab),
+  });
+  const panelId = "friends-panel-content";
 
   return (
     <section className="friends-panel" aria-labelledby="friends-heading">
@@ -54,18 +72,19 @@ export function FriendsView({
           <h1 id="friends-heading">Friends</h1>
         </div>
       </header>
-      <div className="tabs" role="tablist" aria-label="Friend views">
-        {[
-          { id: "online", label: "Online", count: onlineFriends.length },
-          { id: "all", label: "All", count: accepted.length },
-          { id: "pending", label: "Pending", count: pending.length },
-          { id: "add", label: "Add Friend", count: 0 },
-        ].map((item) => (
+      <p id="friend-tabs-help" className="sr-only">
+        Use Left and Right Arrow to move between friend views.
+      </p>
+      <div className="tabs" role="tablist" aria-label="Friend views" aria-describedby="friend-tabs-help">
+        {tabs.map((item) => (
           <button
+            {...getItemProps(item.id)}
             key={item.id}
+            id={`friends-tab-${item.id}`}
             type="button"
             role="tab"
             aria-selected={tab === item.id}
+            aria-controls={panelId}
             className={tab === item.id ? "selected" : ""}
             onClick={() => setTab(item.id as typeof tab)}
           >
@@ -75,7 +94,13 @@ export function FriendsView({
         ))}
       </div>
 
-      <div className="friends-list">
+      <div
+        id={panelId}
+        className="friends-list"
+        role="tabpanel"
+        aria-labelledby={`friends-tab-${tab}`}
+        tabIndex={0}
+      >
         {tab === "add" ? (
           <>
             <label className="search-field add-search">

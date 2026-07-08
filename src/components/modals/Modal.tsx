@@ -1,5 +1,5 @@
 import { X } from "lucide-react";
-import { useEffect, useId } from "react";
+import { useEffect, useId, useRef } from "react";
 import type { ReactNode } from "react";
 
 interface ModalProps {
@@ -11,36 +11,60 @@ interface ModalProps {
 
 export function Modal({ open, title, onClose, children }: ModalProps) {
   const titleId = useId();
+  const dialogRef = useRef<HTMLDialogElement | null>(null);
+  const titleRef = useRef<HTMLHeadingElement | null>(null);
+  const returnFocusRef = useRef<HTMLElement | null>(null);
 
   useEffect(() => {
-    if (!open) {
+    const dialog = dialogRef.current;
+    if (!dialog) {
       return undefined;
     }
 
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") {
-        onClose();
+    if (!open) {
+      if (dialog.open) {
+        dialog.close();
       }
+      returnFocusRef.current?.focus();
+      return undefined;
+    }
+
+    returnFocusRef.current = document.activeElement instanceof HTMLElement
+      ? document.activeElement
+      : null;
+
+    if (!dialog.open) {
+      dialog.showModal();
+    }
+    titleRef.current?.focus();
+
+    const onCancel = (event: Event) => {
+      event.preventDefault();
+      onClose();
     };
-    document.addEventListener("keydown", onKeyDown);
-    return () => document.removeEventListener("keydown", onKeyDown);
+    const onCloseDialog = () => {
+      returnFocusRef.current?.focus();
+    };
+
+    dialog.addEventListener("cancel", onCancel);
+    dialog.addEventListener("close", onCloseDialog);
+    return () => {
+      dialog.removeEventListener("cancel", onCancel);
+      dialog.removeEventListener("close", onCloseDialog);
+    };
   }, [open, onClose]);
 
-  if (!open) {
-    return null;
-  }
-
   return (
-    <div className="modal-backdrop" role="presentation">
-      <section className="modal-card" role="dialog" aria-modal="true" aria-labelledby={titleId}>
+    <dialog ref={dialogRef} className="modal-card" aria-labelledby={titleId} aria-modal="true">
+      <section>
         <header>
-          <h2 id={titleId}>{title}</h2>
+          <h2 id={titleId} ref={titleRef} tabIndex={-1}>{title}</h2>
           <button type="button" className="icon-button" aria-label="Close dialog" onClick={onClose}>
             <X aria-hidden="true" size={18} />
           </button>
         </header>
         {children}
       </section>
-    </div>
+    </dialog>
   );
 }

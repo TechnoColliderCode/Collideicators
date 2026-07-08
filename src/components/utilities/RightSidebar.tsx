@@ -9,7 +9,7 @@ interface RightSidebarProps {
 export function RightSidebar({ activeTab, unreadCount, onChangeTab }: RightSidebarProps) {
   if (!activeTab) {
     return (
-      <aside className="right-rail" aria-label="Utilities">
+      <aside className="right-rail" aria-label="Utilities" data-focus-target="utilities">
         <button type="button" className="icon-button" aria-label="Open notifications" onClick={() => onChangeTab("notifications")}>
           <Bell aria-hidden="true" size={18} />
           <span className="badge">{unreadCount}</span>
@@ -22,7 +22,11 @@ export function RightSidebar({ activeTab, unreadCount, onChangeTab }: RightSideb
   }
 
   return (
-    <aside className="right-panel" aria-label={activeTab === "notifications" ? "Notifications" : "Calendar"}>
+    <aside
+      className="right-panel"
+      aria-label={activeTab === "notifications" ? "Notifications" : "Calendar"}
+      data-focus-target="utilities"
+    >
       <header>
         <h2>{activeTab === "notifications" ? "Notifications" : "Calendar"}</h2>
         <button type="button" className="icon-button" aria-label="Close side panel" onClick={() => onChangeTab(null)}>

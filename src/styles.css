@@ -37,7 +37,9 @@ button:disabled {
 button:focus-visible,
 input:focus-visible,
 textarea:focus-visible,
-a:focus-visible {
+a:focus-visible,
+.message-row:focus-visible,
+[role="tabpanel"]:focus-visible {
   outline: 3px solid #facc15;
   outline-offset: 2px;
 }
@@ -703,22 +705,20 @@ a:focus-visible {
   background: #dc2626;
 }
 
-.modal-backdrop {
-  position: fixed;
-  inset: 0;
-  z-index: 50;
-  display: grid;
-  place-items: center;
-  padding: 1rem;
-  background: rgb(0 0 0 / 0.65);
-}
-
 .modal-card {
   width: min(30rem, 100%);
+  max-width: calc(100vw - 2rem);
+  margin: auto;
+  padding: 0;
   border: 1px solid rgb(255 255 255 / 0.12);
   border-radius: 0.75rem;
   background: #17172a;
+  color: #f7f7fb;
   box-shadow: 0 1.5rem 5rem rgb(0 0 0 / 0.35);
+}
+
+.modal-card::backdrop {
+  background: rgb(0 0 0 / 0.65);
 }
 
 .modal-card header {
