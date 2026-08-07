@@ -1,4 +1,4 @@
-# Galaxia Star Communicators
+# Collideicators
 A Mashup Of All Chatting Apps (Discord, TeamTalk, Imessage, Whatsapp, google meet and Microsoft Teams)
 
 This is a normal Vite, React, and TypeScript chat app. The current development build uses local browser storage so the interface can run without a hosted backend while the real server plan is decided.
