@@ -1,10 +1,11 @@
-import { ChevronDown, Settings } from "lucide-react";
+import { ChevronDown, LogOut, Settings } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import type { PresenceStatus, User } from "../../types";
 
 interface UserBarProps {
   user: User;
   onStatusChange: (status: PresenceStatus) => void;
+  onLogout: () => void;
 }
 
 const STATUS_OPTIONS: { id: PresenceStatus; label: string }[] = [
@@ -14,7 +15,7 @@ const STATUS_OPTIONS: { id: PresenceStatus; label: string }[] = [
   { id: "offline", label: "Invisible" },
 ];
 
-export function UserBar({ user, onStatusChange }: UserBarProps) {
+export function UserBar({ user, onStatusChange, onLogout }: UserBarProps) {
   const [open, setOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement | null>(null);
 
@@ -47,7 +48,7 @@ export function UserBar({ user, onStatusChange }: UserBarProps) {
       <button
         type="button"
         className="status-trigger"
-        aria-label={`Change status. Current status: ${user.status}`}
+        aria-label={`Account menu for ${user.fullName}. Current status: ${user.status}`}
         aria-haspopup="menu"
         aria-expanded={open}
         onClick={() => setOpen((value) => !value)}
@@ -64,7 +65,7 @@ export function UserBar({ user, onStatusChange }: UserBarProps) {
       </button>
 
       {open && (
-        <div className="status-menu" role="menu" aria-label="Set your status">
+        <div className="status-menu" role="menu" aria-label="Account menu">
           {STATUS_OPTIONS.map((option) => (
             <button
               key={option.id}
@@ -81,6 +82,19 @@ export function UserBar({ user, onStatusChange }: UserBarProps) {
               {option.label}
             </button>
           ))}
+          <span className="status-divider" aria-hidden="true" />
+          <button
+            type="button"
+            role="menuitem"
+            className="logout-item"
+            onClick={() => {
+              setOpen(false);
+              onLogout();
+            }}
+          >
+            <LogOut aria-hidden="true" size={14} />
+            Log out
+          </button>
         </div>
       )}
 

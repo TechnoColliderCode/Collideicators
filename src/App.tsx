@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
+import { AuthScreen } from "./components/auth/AuthScreen";
 import { CallPanel } from "./components/calls/CallPanel";
 import { SkypeCallPanel } from "./components/calls/SkypeCallPanel";
 import { MessageArea } from "./components/chat/MessageArea";
@@ -11,6 +12,7 @@ import { NewChatModal } from "./components/modals/NewChatModal";
 import { RightSidebar } from "./components/utilities/RightSidebar";
 import type { NotificationItem } from "./components/utilities/RightSidebar";
 import { localStore, replyPayload } from "./data/localStore";
+import type { AuthResult } from "./data/localStore";
 import { useGlobalShortcuts } from "./hooks/useGlobalShortcuts";
 import type { ChatTarget, Conversation, Message, PresenceStatus, User } from "./types";
 import { summarizeUnread, targetKey } from "./utils/chat";
@@ -55,7 +57,8 @@ function App() {
     localStore.snapshot,
     localStore.snapshot,
   );
-  const currentUser = snapshot.users.find((user) => user.id === localStore.currentUserId) ?? null;
+  const currentUser =
+    snapshot.users.find((user) => user.id === snapshot.currentUserId) ?? null;
   const servers = currentUser
     ? snapshot.servers.filter((server) => server.memberIds.includes(currentUser.id))
     : [];
@@ -236,11 +239,23 @@ function App() {
 
   const selectServer = (serverId: string) => {
     const serverChannels = localStore.getChannels(serverId);
-    setActiveServerId(serverId);
-    setActiveChannelId(serverChannels.find((channel) => channel.type === "text")?.id ?? null);
-    setActiveConversationId(null);
     setShowFriends(false);
     clearCallContext();
+    setActiveServerId(serverId);
+    setActiveConversationId(null);
+
+    const connectedChannel = snapshot.voice.channelId;
+    if (connectedChannel && serverChannels.some((channel) => channel.id === connectedChannel)) {
+      setActiveChannelId(connectedChannel);
+      return;
+    }
+
+    const firstChannel = serverChannels[0];
+    if (firstChannel) {
+      joinVoice(firstChannel.id);
+    } else {
+      setActiveChannelId(null);
+    }
   };
 
   const goHome = () => {
@@ -259,26 +274,12 @@ function App() {
     clearCallContext();
   };
 
-  const selectChannel = (channelId: string) => {
-    const channel = snapshot.channels.find((item) => item.id === channelId);
-    if (channel?.type === "voice") {
-      joinVoice(channel.id);
-      return;
-    }
-    setActiveChannelId(channelId);
-    setActiveConversationId(null);
-    setShowFriends(false);
-    clearCallContext();
-  };
-
   const joinVoice = (channelId: string) => {
     if (!currentUser) {
       return;
     }
 
     if (snapshot.voice.channelId === channelId) {
-      localStore.leaveVoice();
-      setAnnouncement("Left the voice room.");
       return;
     }
 
@@ -290,16 +291,8 @@ function App() {
 
     if (channel) {
       setActiveServerId(channel.serverId);
-      const serverChannels = localStore.getChannels(channel.serverId);
-      const hasOpenTextChannel =
-        activeChannelId !== null &&
-        serverChannels.some((item) => item.id === activeChannelId && item.type === "text");
-      if (!hasOpenTextChannel) {
-        setActiveChannelId(
-          serverChannels.find((item) => item.type === "text")?.id ?? null,
-        );
-        setActiveConversationId(null);
-      }
+      setActiveChannelId(channel.id);
+      setActiveConversationId(null);
     }
 
     const timer = window.setTimeout(() => {
@@ -417,9 +410,11 @@ function App() {
     }
 
     if (activeServer) {
-      const voiceChannelToJoin = channels.find((channel) => channel.type === "voice");
-      if (voiceChannelToJoin && snapshot.voice.channelId !== voiceChannelToJoin.id) {
-        joinVoice(voiceChannelToJoin.id);
+      const connectedHere = channels.some(
+        (channel) => channel.id === snapshot.voice.channelId,
+      );
+      if (!connectedHere && channels[0]) {
+        joinVoice(channels[0].id);
       }
       return;
     }
@@ -471,15 +466,67 @@ function App() {
 
   const resetDemoData = () => {
     localStore.resetDemoData();
+    const state = localStore.snapshot();
     setActiveServerId(null);
     setActiveChannelId(null);
-    setActiveConversationId("conversation_alex_jordan");
+    setActiveConversationId(
+      state.currentUserId
+        ? getConversationsForUser(state.conversations, state.currentUserId)[0]?.id ?? null
+        : null,
+    );
     setShowFriends(false);
     setShowMembers(false);
     setCall(null);
     setReplyTarget(null);
     setAnnouncement("Demo data reset.");
   };
+
+  const applyAuthResult = (result: AuthResult): AuthResult => {
+    if (!result.ok || !result.userId) {
+      return result;
+    }
+
+    const state = localStore.snapshot();
+    setActiveServerId(null);
+    setActiveChannelId(null);
+    setActiveConversationId(
+      getConversationsForUser(state.conversations, result.userId)[0]?.id ?? null,
+    );
+    setShowFriends(false);
+    setShowMembers(false);
+    setCall(null);
+    setReplyTarget(null);
+    setSearchQuery("");
+    setAnnouncement("Logged in.");
+    return result;
+  };
+
+  const handleLogin = (identifier: string, password: string) =>
+    applyAuthResult(localStore.login(identifier, password));
+
+  const handleRegister = (username: string, email: string, password: string) =>
+    applyAuthResult(localStore.register(username, email, password));
+
+  const handleLogout = () => {
+    localStore.logout();
+    setActiveServerId(null);
+    setActiveChannelId(null);
+    setActiveConversationId(null);
+    setShowFriends(false);
+    clearCallContext();
+    setSearchQuery("");
+    setAnnouncement("Logged out.");
+  };
+
+  if (snapshot.currentUserId === null) {
+    return (
+      <AuthScreen
+        onLogin={handleLogin}
+        onRegister={handleRegister}
+        onResetDemo={resetDemoData}
+      />
+    );
+  }
 
   if (!currentUser) {
     return (
@@ -531,7 +578,6 @@ function App() {
           voiceLabel={voiceLabel}
           onSearchChange={setSearchQuery}
           onSelectConversation={selectConversation}
-          onSelectChannel={selectChannel}
           onShowFriends={() => {
             setShowFriends(true);
             setActiveConversationId(null);
@@ -540,6 +586,7 @@ function App() {
           }}
           onNewChat={() => setShowNewChat(true)}
           onStatusChange={setPresence}
+          onLogout={handleLogout}
           onJoinVoice={joinVoice}
           onLeaveVoice={() => {
             localStore.leaveVoice();

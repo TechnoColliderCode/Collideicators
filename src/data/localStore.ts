@@ -18,10 +18,28 @@ import { extractMentions } from "../utils/chat";
 
 const STORAGE_KEY = "gsc_state_v1";
 
+export interface AuthResult {
+  ok: boolean;
+  error?: string;
+  userId?: string;
+}
+
 const now = () => new Date().toISOString();
 
 const createId = (prefix: string) =>
   `${prefix}_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
+
+const hashPassword = (password: string) => {
+  const input = `gsc:${password}`;
+  let first = 0x811c9dc5;
+  let second = 0x1000193;
+  for (let index = 0; index < input.length; index += 1) {
+    const code = input.charCodeAt(index);
+    first = Math.imul(first ^ code, 16777619) >>> 0;
+    second = Math.imul(second + code + index, 2654435761) >>> 0;
+  }
+  return `${first.toString(16).padStart(8, "0")}${second.toString(16).padStart(8, "0")}`;
+};
 
 const emptyVoice = (): VoiceSession => ({
   channelId: null,
@@ -53,17 +71,17 @@ const seedState = (): AppState => {
       id: "channel_general",
       serverId: servers[0].id,
       name: "general",
-      type: "text",
-      description: "General chat",
-      participantCount: 3,
+      type: "voice",
+      description: "Main voice room",
+      participantCount: 0,
       maxParticipants: 25,
     },
     {
       id: "channel_voice",
       serverId: servers[0].id,
-      name: "voice",
+      name: "lounge",
       type: "voice",
-      description: "Voice room",
+      description: "Casual voice room",
       participantCount: 0,
       maxParticipants: 15,
     },
@@ -178,6 +196,7 @@ const seedState = (): AppState => {
   ];
 
   return {
+    currentUserId: null,
     users,
     servers,
     channels,
@@ -196,6 +215,7 @@ const normalizeState = (parsed: Partial<AppState>): AppState => {
   const users = parsed.users ?? seeded.users;
 
   return {
+    currentUserId: parsed.currentUserId ?? null,
     users,
     servers: parsed.servers ?? seeded.servers,
     channels: parsed.channels ?? seeded.channels,
@@ -268,8 +288,6 @@ const replyPayload = (message: Message): ReplyRef => ({
 });
 
 export const localStore = {
-  currentUserId: "user_alex",
-
   subscribe(listener: () => void) {
     listeners = [...listeners, listener];
     return () => {
@@ -282,12 +300,87 @@ export const localStore = {
   },
 
   resetDemoData() {
+    const previousSession = readState().currentUserId;
     const seeded = seedState();
+    seeded.currentUserId = seeded.users.some((user) => user.id === previousSession)
+      ? previousSession
+      : null;
     writeState(seeded);
   },
 
+  login(identifier: string, password: string): AuthResult {
+    const query = identifier.trim().toLowerCase();
+    if (!query || !password) {
+      return { ok: false, error: "Enter your email and password." };
+    }
+
+    const state = readState();
+    const user = state.users.find(
+      (candidate) =>
+        candidate.email.toLowerCase() === query || candidate.fullName.toLowerCase() === query,
+    );
+
+    if (!user || !user.passwordHash || user.passwordHash !== hashPassword(password)) {
+      return { ok: false, error: "Incorrect email or password." };
+    }
+
+    writeState({ ...state, currentUserId: user.id });
+    return { ok: true, userId: user.id };
+  },
+
+  register(username: string, email: string, password: string): AuthResult {
+    const name = username.trim();
+    const mail = email.trim().toLowerCase();
+
+    if (name.length < 2) {
+      return { ok: false, error: "Username must be at least 2 characters." };
+    }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(mail)) {
+      return { ok: false, error: "Enter a valid email address." };
+    }
+    if (password.length < 6) {
+      return { ok: false, error: "Password must be at least 6 characters." };
+    }
+
+    const state = readState();
+    if (state.users.some((candidate) => candidate.email.toLowerCase() === mail)) {
+      return { ok: false, error: "That email is already registered." };
+    }
+
+    const user: User = {
+      id: createId("user"),
+      fullName: name,
+      email: mail,
+      status: "online",
+      passwordHash: hashPassword(password),
+    };
+
+    const servers = state.servers.map((server) =>
+      server.id === "server_lobby" && !server.memberIds.includes(user.id)
+        ? { ...server, memberIds: [...server.memberIds, user.id] }
+        : server,
+    );
+
+    writeState({
+      ...state,
+      users: [...state.users, user],
+      servers,
+      currentUserId: user.id,
+    });
+    return { ok: true, userId: user.id };
+  },
+
+  logout() {
+    const state = readState();
+    writeState({ ...state, currentUserId: null, typing: {} });
+  },
+
+  getCurrentUserId() {
+    return readState().currentUserId;
+  },
+
   getCurrentUser() {
-    return readState().users.find((user) => user.id === this.currentUserId) ?? null;
+    return readState().users.find((user) => user.id === readState().currentUserId) ?? null;
   },
 
   getUsers() {
@@ -544,14 +637,14 @@ export const localStore = {
         id: createId("channel"),
         serverId: server.id,
         name: "general",
-        type: "text",
+        type: "voice",
         participantCount: 0,
         maxParticipants: 25,
       },
       {
         id: createId("channel"),
         serverId: server.id,
-        name: "voice",
+        name: "lounge",
         type: "voice",
         participantCount: 0,
         maxParticipants: 15,

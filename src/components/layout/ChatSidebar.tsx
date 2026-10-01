@@ -1,5 +1,4 @@
 import {
-  Hash,
   Headphones,
   Mic,
   MicOff,
@@ -30,10 +29,10 @@ interface ChatSidebarProps {
   voiceLabel: string | null;
   onSearchChange: (value: string) => void;
   onSelectConversation: (conversationId: string) => void;
-  onSelectChannel: (channelId: string) => void;
   onShowFriends: () => void;
   onNewChat: () => void;
   onStatusChange: (status: PresenceStatus) => void;
+  onLogout: () => void;
   onJoinVoice: (channelId: string) => void;
   onLeaveVoice: () => void;
   onToggleMute: () => void;
@@ -54,10 +53,10 @@ export function ChatSidebar({
   voiceLabel,
   onSearchChange,
   onSelectConversation,
-  onSelectChannel,
   onShowFriends,
   onNewChat,
   onStatusChange,
+  onLogout,
   onJoinVoice,
   onLeaveVoice,
   onToggleMute,
@@ -65,7 +64,7 @@ export function ChatSidebar({
 }: ChatSidebarProps) {
   return (
     <aside className="chat-sidebar" aria-label={mode === "server" ? "Server channels" : "Direct messages"}>
-      <UserBar user={currentUser} onStatusChange={onStatusChange} />
+      <UserBar user={currentUser} onStatusChange={onStatusChange} onLogout={onLogout} />
       <div className="sidebar-header">
         {mode === "server" ? (
           <h2>{serverName || "Server"}</h2>
@@ -98,7 +97,6 @@ export function ChatSidebar({
             activeId={activeId}
             unread={unread}
             voice={voice}
-            onSelectChannel={onSelectChannel}
             onJoinVoice={onJoinVoice}
           />
         ) : (
@@ -165,14 +163,12 @@ function ChannelList({
   activeId,
   unread,
   voice,
-  onSelectChannel,
   onJoinVoice,
 }: {
   channels: Channel[];
   activeId: string | null;
   unread: Record<string, { count: number; mentions: number }>;
   voice: VoiceSession;
-  onSelectChannel: (channelId: string) => void;
   onJoinVoice: (channelId: string) => void;
 }) {
   const ids = useMemo(() => channels.map((channel) => channel.id), [channels]);
@@ -180,24 +176,16 @@ function ChannelList({
     ids,
     selectedId: activeId,
     orientation: "vertical",
-    onActivate: (id) => {
-      const channel = channels.find((item) => item.id === id);
-      if (channel?.type === "voice") {
-        onJoinVoice(channel.id);
-      } else {
-        onSelectChannel(id);
-      }
-    },
+    onActivate: onJoinVoice,
   });
 
   return (
     <section aria-labelledby="channels-heading" data-focus-target="sidebar">
       <h3 id="channels-heading" className="section-label">
-        Channels
+        Voice channels
       </h3>
       <p id="channels-help" className="sr-only">
-        Use Up and Down Arrow to move between channels. Press Enter to open the focused channel.
-        Voice channels join the voice room.
+        Use Up and Down Arrow to move between channels. Press Enter to join the focused voice channel.
       </p>
       {channels.map((channel) => {
         const summary = unread[channel.id] ?? { count: 0, mentions: 0 };
@@ -210,29 +198,21 @@ function ChannelList({
             className={`list-item ${activeId === channel.id ? "selected" : ""} ${joined ? "in-voice" : ""}`}
             aria-current={activeId === channel.id ? "page" : undefined}
             aria-describedby="channels-help"
-            onClick={() =>
-              channel.type === "voice" ? onJoinVoice(channel.id) : onSelectChannel(channel.id)
-            }
+            onClick={() => onJoinVoice(channel.id)}
           >
-            {channel.type === "voice" ? (
-              <Headphones aria-hidden="true" size={16} />
-            ) : (
-              <Hash aria-hidden="true" size={16} />
-            )}
+            <Headphones aria-hidden="true" size={16} />
             <span>{channel.name}</span>
-            {channel.type === "voice" ? (
-              joined ? (
-                <span className="meta voice-meta">Connected</span>
-              ) : (
-                <span className="meta">
-                  {channel.participantCount}/{channel.maxParticipants}
-                </span>
-              )
+            {joined ? (
+              <span className="meta voice-meta">Connected</span>
             ) : summary.count > 0 ? (
               <span className={`unread-badge ${summary.mentions > 0 ? "mention" : ""}`}>
                 {summary.mentions > 0 ? summary.mentions : summary.count}
               </span>
-            ) : null}
+            ) : (
+              <span className="meta">
+                {channel.participantCount}/{channel.maxParticipants}
+              </span>
+            )}
           </button>
         );
       })}

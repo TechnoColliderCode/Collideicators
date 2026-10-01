@@ -15,6 +15,7 @@ export interface User {
   fullName: string;
   email: string;
   status: PresenceStatus;
+  passwordHash?: string;
 }
 
 export interface Server {
@@ -104,6 +105,7 @@ export interface ChatTarget {
 }
 
 export interface AppState {
+  currentUserId: string | null;
   users: User[];
   servers: Server[];
   channels: Channel[];

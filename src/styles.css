@@ -1925,3 +1925,153 @@ a:focus-visible,
     width: 6.5rem;
   }
 }
+
+/* ---- Status menu extras ---- */
+
+.status-divider {
+  display: block;
+  height: 1px;
+  margin: 0.25rem 0.3rem;
+  background: rgb(255 255 255 / 0.1);
+}
+
+.status-menu .logout-item {
+  color: #fca5a5;
+}
+
+.status-menu .logout-item:hover {
+  background: rgb(239 68 68 / 0.18);
+  color: #fecaca;
+}
+
+/* ---- Discord styled authentication ---- */
+
+.auth-page {
+  min-height: 100%;
+  display: grid;
+  place-items: center;
+  padding: 1.5rem;
+  background:
+    radial-gradient(circle at 20% 15%, rgb(88 101 242 / 0.55), transparent 45%),
+    radial-gradient(circle at 80% 85%, rgb(34 211 238 / 0.25), transparent 50%),
+    linear-gradient(140deg, #1b1d3f, #0a0a18 65%);
+}
+
+.auth-card {
+  width: min(28rem, 100%);
+  padding: 2rem;
+  border: 1px solid rgb(255 255 255 / 0.08);
+  border-radius: 0.8rem;
+  background: rgb(24 24 40 / 0.95);
+  box-shadow: 0 1.5rem 4rem rgb(0 0 0 / 0.45);
+}
+
+.auth-logo {
+  width: 3rem;
+  height: 3rem;
+  display: grid;
+  place-items: center;
+  margin: 0 auto 0.9rem;
+  border-radius: 0.9rem;
+  background: #5865f2;
+  color: #fff;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+}
+
+.auth-card h1 {
+  margin: 0;
+  text-align: center;
+  font-size: 1.4rem;
+}
+
+.auth-subtitle {
+  margin: 0.35rem 0 1.4rem;
+  color: rgb(255 255 255 / 0.6);
+  text-align: center;
+}
+
+.auth-form {
+  display: grid;
+  gap: 0.9rem;
+}
+
+.auth-form label {
+  display: grid;
+  gap: 0.35rem;
+  color: rgb(255 255 255 / 0.7);
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+}
+
+.auth-form input {
+  padding: 0.7rem 0.75rem;
+  border: 1px solid rgb(255 255 255 / 0.1);
+  border-radius: 0.4rem;
+  background: #08080f;
+  color: #fff;
+  font-size: 0.95rem;
+  letter-spacing: normal;
+  text-transform: none;
+}
+
+.auth-form input:focus {
+  outline: 2px solid #facc15;
+  outline-offset: 1px;
+}
+
+.auth-error {
+  margin: 0;
+  padding: 0.55rem 0.7rem;
+  border-left: 3px solid #ef4444;
+  border-radius: 0.35rem;
+  background: rgb(239 68 68 / 0.12);
+  color: #fecaca;
+  font-size: 0.8rem;
+}
+
+.auth-submit {
+  padding: 0.75rem;
+  border-radius: 0.4rem;
+  background: #5865f2;
+  color: #fff;
+  font-weight: 700;
+}
+
+.auth-submit:hover {
+  background: #4752c4;
+}
+
+.auth-switch {
+  margin: 1rem 0 0;
+  color: rgb(255 255 255 / 0.55);
+  font-size: 0.85rem;
+}
+
+.auth-switch button {
+  padding: 0;
+  background: transparent;
+  color: #00a8fc;
+  font-size: 0.85rem;
+}
+
+.auth-switch button:hover {
+  text-decoration: underline;
+}
+
+.auth-reset {
+  display: block;
+  margin: 0.9rem auto 0;
+  padding: 0.35rem 0.6rem;
+  border-radius: 0.4rem;
+  background: transparent;
+  color: rgb(255 255 255 / 0.45);
+  font-size: 0.72rem;
+}
+
+.auth-reset:hover {
+  color: #fff;
+  text-decoration: underline;
+}
