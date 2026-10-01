@@ -49,6 +49,9 @@ export function NewChatModal({
         <fieldset>
           <legend>Select people</legend>
           <div className="choice-list">
+            {otherUsers.length === 0 && (
+              <p className="empty-note">No other accounts yet.</p>
+            )}
             {otherUsers.map((user) => {
               const isSelected = selected.some((item) => item.id === user.id);
               return (

@@ -49,7 +49,7 @@ Borrowed from the apps this project mashes together:
 - Reply to a message with a quoted preview that scrolls back to the original.
 - Tapback style reactions (👍 ❤️ 😂 😮 😢 😡) with one-tap quick reactions on hover.
 - Delivery and read ticks (✓ sent, ✓✓ delivered, ✓✓ blue read) on your direct messages.
-- Typing indicator with simulated replies in direct conversations.
+- Typing indicator UI in conversations and voice rooms.
 - Emoji picker in the composer.
 
 ### Presence
@@ -58,14 +58,13 @@ Borrowed from the apps this project mashes together:
 ## Authentication
 
 - There are no demo accounts. Register a new account on the "Create an account" screen and log in with it.
-- The seeded people (Alex, Jordan, Sam, Morgan) are chat partners only and cannot be logged into.
-- Registering adds you to the Galaxia Lobby server, where you can join the voice channels right away.
+- The app starts empty: no seeded people, servers, channels, or messages. Create a server, invite or register more accounts on this device, and start chatting.
 - Passwords are stored only as a local hash in `localStorage` on this device. This is a stand in until a real backend exists, not production grade auth.
 
 ## Notes
 
 - Chat data is stored in `localStorage` under `gsc_state_v1`.
 - The session (who you are logged in as) is part of the same stored state and survives reloads until you log out.
-- Use the "Reset demo data" button on the login screen or in the app footer when you want to reseed the local demo conversations.
-- Replies, typing indicators, and voice room joins are simulated locally because there is no backend yet.
+- Use the "Reset local data" button on the login screen or in the app footer to clear every conversation, server, and message while keeping the account you are logged in with.
+- There are no simulated replies or fake participants: you only see accounts that exist in your local storage, and messages only come from people using them.
 - No hosted app SDK, generated entity schemas, or platform-specific Vite plugins are used.

@@ -24,21 +24,10 @@ interface ActiveCall {
   participants: User[];
 }
 
-const PEER_REPLIES = [
-  "Got it 👍",
-  "Sounds good to me!",
-  "Nice, let me check and get back to you.",
-  "Haha, that made my day 😂",
-  "On my way.",
-  "Can you share a bit more detail @{name}?",
-];
-
 function App() {
   const [activeServerId, setActiveServerId] = useState<string | null>(null);
   const [activeChannelId, setActiveChannelId] = useState<string | null>(null);
-  const [activeConversationId, setActiveConversationId] = useState<string | null>(
-    "conversation_alex_jordan",
-  );
+  const [activeConversationId, setActiveConversationId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [showCreateServer, setShowCreateServer] = useState(false);
   const [showNewChat, setShowNewChat] = useState(false);
@@ -49,8 +38,6 @@ function App() {
   const [replyTarget, setReplyTarget] = useState<Message | null>(null);
   const [announcement, setAnnouncement] = useState("");
   const mainRef = useRef<HTMLElement | null>(null);
-  const replyTimers = useRef<number[]>([]);
-  const activeTargetRef = useRef<ChatTarget | null>(null);
 
   const snapshot = useSyncExternalStore(
     localStore.subscribe,
@@ -88,21 +75,10 @@ function App() {
   const activeTargetKey = activeTarget ? targetKey(activeTarget) : null;
 
   useEffect(() => {
-    activeTargetRef.current = activeTarget;
-  }, [activeTarget]);
-
-  useEffect(() => {
     if (activeTargetKey) {
       localStore.markRead(activeTargetKey);
     }
   }, [activeTargetKey]);
-
-  useEffect(
-    () => () => {
-      replyTimers.current.forEach((timer) => window.clearTimeout(timer));
-    },
-    [],
-  );
 
   const messages = useMemo(() => {
     if (!activeTarget) {
@@ -294,64 +270,6 @@ function App() {
       setActiveChannelId(channel.id);
       setActiveConversationId(null);
     }
-
-    const timer = window.setTimeout(() => {
-      const state = localStore.snapshot();
-      const joinedChannel = state.channels.find((item) => item.id === channelId);
-      const server = state.servers.find((item) => item.id === joinedChannel?.serverId);
-      const candidate = state.users.find(
-        (user) =>
-          user.id !== currentUser.id &&
-          server?.memberIds.includes(user.id) &&
-          user.status === "online",
-      );
-      if (candidate && state.voice.channelId === channelId) {
-        localStore.addVoiceParticipant(candidate.id);
-      }
-    }, 2500);
-    replyTimers.current.push(timer);
-  };
-
-  const schedulePeerReply = (target: ChatTarget, sender: User) => {
-    if (target.kind !== "conversation") {
-      return;
-    }
-
-    const conversation = snapshot.conversations.find((item) => item.id === target.id);
-    if (!conversation || conversation.type !== "direct") {
-      return;
-    }
-
-    const other = snapshot.users.find(
-      (user) => user.id !== sender.id && conversation.participantIds.includes(user.id),
-    );
-    if (!other) {
-      return;
-    }
-
-    const key = targetKey(target);
-    localStore.setTyping(key, other.id);
-
-    const timer = window.setTimeout(() => {
-      localStore.setTyping(key, null);
-      const state = localStore.snapshot();
-      if (!state.conversations.some((item) => item.id === target.id)) {
-        return;
-      }
-      const template = PEER_REPLIES[Math.floor(Math.random() * PEER_REPLIES.length)];
-      localStore.sendMessage(
-        target,
-        other,
-        template.replace("{name}", sender.fullName.split(" ")[0]),
-        "text",
-        "",
-        null,
-      );
-      if (activeTargetRef.current && targetKey(activeTargetRef.current) === key) {
-        localStore.markRead(key);
-      }
-    }, 2200);
-    replyTimers.current.push(timer);
   };
 
   const sendMessage = (content: string, fileUrl = "", reply: Message | null = null) => {
@@ -369,7 +287,6 @@ function App() {
     );
     setReplyTarget(null);
     setAnnouncement(`Sent message: ${message.content}`);
-    schedulePeerReply(activeTarget, currentUser);
   };
 
   const startDirectConversation = (otherUserId: string) => {
@@ -464,21 +381,17 @@ function App() {
     setAnnouncement(`Status set to ${status}.`);
   };
 
-  const resetDemoData = () => {
-    localStore.resetDemoData();
+  const resetLocalData = () => {
+    localStore.resetLocalData();
     const state = localStore.snapshot();
     setActiveServerId(null);
     setActiveChannelId(null);
-    setActiveConversationId(
-      state.currentUserId
-        ? getConversationsForUser(state.conversations, state.currentUserId)[0]?.id ?? null
-        : null,
-    );
+    setActiveConversationId(null);
     setShowFriends(false);
     setShowMembers(false);
     setCall(null);
     setReplyTarget(null);
-    setAnnouncement("Demo data reset.");
+    setAnnouncement(state.currentUserId ? "Local data reset." : "Local data cleared.");
   };
 
   const applyAuthResult = (result: AuthResult): AuthResult => {
@@ -523,7 +436,7 @@ function App() {
       <AuthScreen
         onLogin={handleLogin}
         onRegister={handleRegister}
-        onResetDemo={resetDemoData}
+        onResetData={resetLocalData}
       />
     );
   }
@@ -532,9 +445,9 @@ function App() {
     return (
       <main className="empty-page">
         <h1>Galaxia Star Communicators</h1>
-        <p>Unable to load the local demo user.</p>
-        <button type="button" onClick={resetDemoData}>
-          Reset demo data
+        <p>Unable to load your saved account.</p>
+        <button type="button" onClick={resetLocalData}>
+          Reset local data
         </button>
       </main>
     );
@@ -716,8 +629,8 @@ function App() {
 
       <footer className="app-footer">
         <span>Local TypeScript prototype</span>
-        <button type="button" onClick={resetDemoData}>
-          Reset demo data
+        <button type="button" onClick={resetLocalData}>
+          Reset local data
         </button>
       </footer>
 

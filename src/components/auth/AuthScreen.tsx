@@ -5,10 +5,10 @@ import type { AuthResult } from "../../data/localStore";
 interface AuthScreenProps {
   onLogin: (identifier: string, password: string) => AuthResult;
   onRegister: (username: string, email: string, password: string) => AuthResult;
-  onResetDemo: () => void;
+  onResetData: () => void;
 }
 
-export function AuthScreen({ onLogin, onRegister, onResetDemo }: AuthScreenProps) {
+export function AuthScreen({ onLogin, onRegister, onResetData }: AuthScreenProps) {
   const [mode, setMode] = useState<"login" | "register">("login");
   const [username, setUsername] = useState("");
   const [identifier, setIdentifier] = useState("");
@@ -134,8 +134,8 @@ export function AuthScreen({ onLogin, onRegister, onResetDemo }: AuthScreenProps
           )}
         </p>
 
-        <button type="button" className="auth-reset" onClick={onResetDemo}>
-          Reset demo data
+        <button type="button" className="auth-reset" onClick={onResetData}>
+          Reset local data
         </button>
       </section>
     </main>
