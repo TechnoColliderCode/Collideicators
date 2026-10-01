@@ -24,10 +24,26 @@ export interface AuthResult {
   userId?: string;
 }
 
+export interface InviteResult {
+  ok: boolean;
+  error?: string;
+  serverId?: string;
+}
+
 const now = () => new Date().toISOString();
 
 const createId = (prefix: string) =>
   `${prefix}_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
+
+const createInviteCode = () =>
+  `${Math.random().toString(36).slice(2, 6)}${Date.now().toString(36).slice(-4)}`;
+
+const extractInviteCode = (input: string) => {
+  const cleaned = input.trim().split(/[?#]/)[0].replace(/\/+$/, "");
+  const marker = cleaned.toLowerCase().indexOf("/invite/");
+  const tail = marker >= 0 ? cleaned.slice(marker + "/invite/".length) : cleaned;
+  return (tail.split("/").pop() ?? "").trim();
+};
 
 const hashPassword = (password: string) => {
   const input = `gsc:${password}`;
@@ -65,7 +81,11 @@ const seedState = (): AppState => ({
 const normalizeState = (parsed: Partial<AppState>): AppState => ({
   currentUserId: parsed.currentUserId ?? null,
   users: parsed.users ?? [],
-  servers: parsed.servers ?? [],
+  servers: (parsed.servers ?? []).map((server) =>
+    server.inviteCode
+      ? server
+      : { ...server, inviteCode: createInviteCode() },
+  ),
   channels: parsed.channels ?? [],
   conversations: parsed.conversations ?? [],
   messages: (parsed.messages ?? []).map((message) => ({
@@ -100,8 +120,14 @@ const readState = (): AppState => {
   }
 
   try {
-    cachedState = normalizeState(JSON.parse(stored) as Partial<AppState>);
-    return cachedState;
+    const parsed = JSON.parse(stored) as Partial<AppState>;
+    const normalized = normalizeState(parsed);
+    if (parsed.servers?.some((server) => !server.inviteCode)) {
+      writeState(normalized, false);
+    } else {
+      cachedState = normalized;
+    }
+    return normalized;
   } catch {
     const seeded = seedState();
     writeState(seeded, false);
@@ -473,6 +499,7 @@ export const localStore = {
       color: "#6366f1",
       ownerId: owner.id,
       memberIds: [owner.id],
+      inviteCode: createInviteCode(),
     };
     const channels: Channel[] = [
       {
@@ -500,6 +527,44 @@ export const localStore = {
     });
 
     return { server, channels };
+  },
+
+  resetInviteCode(serverId: string) {
+    const state = readState();
+    writeState({
+      ...state,
+      servers: state.servers.map((server) =>
+        server.id === serverId ? { ...server, inviteCode: createInviteCode() } : server,
+      ),
+    });
+  },
+
+  joinServerByInvite(user: User, input: string): InviteResult {
+    const code = extractInviteCode(input);
+    if (!code) {
+      return { ok: false, error: "Enter an invite link or code." };
+    }
+
+    const state = readState();
+    const server = state.servers.find(
+      (candidate) => candidate.inviteCode.toLowerCase() === code.toLowerCase(),
+    );
+    if (!server) {
+      return { ok: false, error: "That invite is invalid or has expired." };
+    }
+    if (server.memberIds.includes(user.id)) {
+      return { ok: false, error: "You are already in that server." };
+    }
+
+    writeState({
+      ...state,
+      servers: state.servers.map((candidate) =>
+        candidate.id === server.id
+          ? { ...candidate, memberIds: [...candidate.memberIds, user.id] }
+          : candidate,
+      ),
+    });
+    return { ok: true, serverId: server.id };
   },
 
   createConversation(currentUser: User, selectedUsers: User[], name: string) {

@@ -24,6 +24,7 @@ Borrowed from the apps this project mashes together:
 
 ### Discord
 - Discord styled authentication: a "Welcome back!" login screen and a "Create an account" register screen, local sessions, and log out from the account menu in the user bar.
+- Server invites: the "Invite" button in the server sidebar opens a copyable invite link and code (with reset), and the "+" button in the server bar offers "Join server" to redeem one, joining adds you to the server just like Discord.
 - Servers with a server member list toggle in the chat header.
 - Unread and @mention badges on conversations and channels, cleared when you open the chat.
 - Message hover menu: reply, react, pin, copy, edit, and unsend your own messages.
@@ -59,6 +60,7 @@ Borrowed from the apps this project mashes together:
 
 - There are no demo accounts. Register a new account on the "Create an account" screen and log in with it.
 - The app starts empty: no seeded people, servers, channels, or messages. Create a server, invite or register more accounts on this device, and start chatting.
+- Invites are redeemed by other accounts on this device, since all data lives in local storage.
 - Passwords are stored only as a local hash in `localStorage` on this device. This is a stand in until a real backend exists, not production grade auth.
 
 ## Notes

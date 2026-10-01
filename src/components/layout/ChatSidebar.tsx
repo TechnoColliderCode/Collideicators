@@ -31,6 +31,7 @@ interface ChatSidebarProps {
   onSelectConversation: (conversationId: string) => void;
   onShowFriends: () => void;
   onNewChat: () => void;
+  onInvite: () => void;
   onStatusChange: (status: PresenceStatus) => void;
   onLogout: () => void;
   onJoinVoice: (channelId: string) => void;
@@ -55,6 +56,7 @@ export function ChatSidebar({
   onSelectConversation,
   onShowFriends,
   onNewChat,
+  onInvite,
   onStatusChange,
   onLogout,
   onJoinVoice,
@@ -67,7 +69,18 @@ export function ChatSidebar({
       <UserBar user={currentUser} onStatusChange={onStatusChange} onLogout={onLogout} />
       <div className="sidebar-header">
         {mode === "server" ? (
-          <h2>{serverName || "Server"}</h2>
+          <div className="sidebar-title-row">
+            <h2>{serverName || "Server"}</h2>
+            <button
+              type="button"
+              className="icon-button"
+              aria-label={`Invite people to ${serverName || "server"}`}
+              aria-haspopup="dialog"
+              onClick={onInvite}
+            >
+              <UserPlus aria-hidden="true" size={16} />
+            </button>
+          </div>
         ) : (
           <button
             type="button"

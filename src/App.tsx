@@ -8,6 +8,8 @@ import { ChatSidebar } from "./components/layout/ChatSidebar";
 import { MembersPanel } from "./components/layout/MembersPanel";
 import { ServerBar } from "./components/layout/ServerBar";
 import { CreateServerModal } from "./components/modals/CreateServerModal";
+import { InviteServerModal } from "./components/modals/InviteServerModal";
+import { JoinServerModal } from "./components/modals/JoinServerModal";
 import { NewChatModal } from "./components/modals/NewChatModal";
 import { RightSidebar } from "./components/utilities/RightSidebar";
 import type { NotificationItem } from "./components/utilities/RightSidebar";
@@ -30,6 +32,8 @@ function App() {
   const [activeConversationId, setActiveConversationId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [showCreateServer, setShowCreateServer] = useState(false);
+  const [showJoinServer, setShowJoinServer] = useState(false);
+  const [inviteServerId, setInviteServerId] = useState<string | null>(null);
   const [showNewChat, setShowNewChat] = useState(false);
   const [showFriends, setShowFriends] = useState(false);
   const [showMembers, setShowMembers] = useState(false);
@@ -319,7 +323,24 @@ function App() {
     setActiveChannelId(newChannels[0]?.id ?? null);
     setActiveConversationId(null);
     clearCallContext();
+    setAnnouncement(`Created server ${server.name}.`);
   };
+
+  const joinServerByInvite = (input: string) => {
+    if (!currentUser) {
+      return { ok: false, error: "No account is signed in." };
+    }
+
+    const result = localStore.joinServerByInvite(currentUser, input);
+    if (result.ok && result.serverId) {
+      setShowJoinServer(false);
+      setAnnouncement("Joined server from invite.");
+      selectServer(result.serverId);
+    }
+    return result;
+  };
+
+  const inviteServer = servers.find((server) => server.id === inviteServerId) ?? null;
 
   const startChatCall = (kind: "voice" | "video") => {
     if (!chatTitle) {
@@ -474,6 +495,7 @@ function App() {
         onGoHome={goHome}
         onSelectServer={selectServer}
         onCreateServer={() => setShowCreateServer(true)}
+        onJoinServer={() => setShowJoinServer(true)}
       />
 
       <div className="workspace">
@@ -498,6 +520,11 @@ function App() {
             clearCallContext();
           }}
           onNewChat={() => setShowNewChat(true)}
+          onInvite={() => {
+            if (activeServer) {
+              setInviteServerId(activeServer.id);
+            }
+          }}
           onStatusChange={setPresence}
           onLogout={handleLogout}
           onJoinVoice={joinVoice}
@@ -638,6 +665,22 @@ function App() {
         open={showCreateServer}
         onClose={() => setShowCreateServer(false)}
         onCreate={createServer}
+      />
+      <JoinServerModal
+        open={showJoinServer}
+        onClose={() => setShowJoinServer(false)}
+        onJoin={joinServerByInvite}
+      />
+      <InviteServerModal
+        open={inviteServerId !== null}
+        server={inviteServer}
+        onClose={() => setInviteServerId(null)}
+        onReset={() => {
+          if (inviteServerId) {
+            localStore.resetInviteCode(inviteServerId);
+            setAnnouncement("Invite link reset.");
+          }
+        }}
       />
       <NewChatModal
         open={showNewChat}

@@ -2075,3 +2075,121 @@ a:focus-visible,
   color: #fff;
   text-decoration: underline;
 }
+
+/* ---- Server invites ---- */
+
+.server-add-wrap {
+  position: relative;
+}
+
+.server-menu {
+  position: absolute;
+  top: 0;
+  left: calc(100% + 0.5rem);
+  z-index: 70;
+  min-width: 10.5rem;
+  display: grid;
+  gap: 0.15rem;
+  padding: 0.3rem;
+  border: 1px solid rgb(255 255 255 / 0.14);
+  border-radius: 0.55rem;
+  background: #17172a;
+  box-shadow: 0 0.8rem 2rem rgb(0 0 0 / 0.45);
+}
+
+.server-menu button {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 0.6rem;
+  border-radius: 0.4rem;
+  background: transparent;
+  color: rgb(255 255 255 / 0.8);
+  font-size: 0.8rem;
+  text-align: left;
+}
+
+.server-menu button:hover,
+.server-menu button:focus-visible {
+  background: rgb(255 255 255 / 0.1);
+  color: #fff;
+}
+
+.sidebar-title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  margin-bottom: 0.65rem;
+}
+
+.sidebar-title-row h2 {
+  margin: 0;
+}
+
+.invite-note {
+  margin: 0;
+  color: rgb(255 255 255 / 0.65);
+  font-size: 0.85rem;
+  line-height: 1.5;
+}
+
+.invite-row {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.invite-row input {
+  flex: 1;
+  min-width: 0;
+  font-size: 0.8rem;
+}
+
+.modal-form .invite-row button {
+  width: auto;
+  margin-left: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  white-space: nowrap;
+}
+
+.modal-form .invite-reset {
+  justify-self: start;
+  margin-left: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  background: rgb(255 255 255 / 0.08);
+  color: rgb(255 255 255 / 0.75);
+}
+
+.modal-form .invite-reset:hover {
+  background: rgb(255 255 255 / 0.14);
+  color: #fff;
+}
+
+.invite-code {
+  margin: 0;
+  color: rgb(255 255 255 / 0.65);
+  font-size: 0.82rem;
+}
+
+.invite-code code {
+  padding: 0.15rem 0.4rem;
+  border-radius: 0.35rem;
+  background: rgb(255 255 255 / 0.08);
+  color: #a5b4fc;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+}
+
+.modal-error {
+  margin: 0;
+  padding: 0.55rem 0.7rem;
+  border-left: 3px solid #ef4444;
+  border-radius: 0.35rem;
+  background: rgb(239 68 68 / 0.12);
+  color: #fecaca;
+  font-size: 0.8rem;
+}

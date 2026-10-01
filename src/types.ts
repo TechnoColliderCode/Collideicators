@@ -24,6 +24,7 @@ export interface Server {
   color: string;
   ownerId: string;
   memberIds: string[];
+  inviteCode: string;
 }
 
 export interface Channel {
