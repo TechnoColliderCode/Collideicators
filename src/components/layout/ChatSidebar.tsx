@@ -27,6 +27,7 @@ interface ChatSidebarProps {
   unread: Record<string, { count: number; mentions: number }>;
   voice: VoiceSession;
   voiceLabel: string | null;
+  micLevel: number;
   onSearchChange: (value: string) => void;
   onSelectConversation: (conversationId: string) => void;
   onShowFriends: () => void;
@@ -52,6 +53,7 @@ export function ChatSidebar({
   unread,
   voice,
   voiceLabel,
+  micLevel,
   onSearchChange,
   onSelectConversation,
   onShowFriends,
@@ -160,6 +162,13 @@ export function ChatSidebar({
             >
               <Headphones aria-hidden="true" size={16} />
             </button>
+            <span className="mic-meter" title="Microphone level">
+              <span
+                className="mic-meter-fill"
+                style={{ width: `${Math.round(Math.min(1, Math.max(0, micLevel)) * 100)}%` }}
+              />
+              <span className="sr-only">Microphone level</span>
+            </span>
             <span className="voice-count">
               <Users aria-hidden="true" size={14} />
               {voice.participantIds.length}

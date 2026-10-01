@@ -33,14 +33,17 @@ Borrowed from the apps this project mashes together:
 
 ### TeamTalk
 - Every channel is a voice calling channel, TeamTalk5 style: there are no text only channels, clicking a channel joins its voice room.
-- A "Voice connected" panel in the sidebar with mute, deafen, and disconnect controls.
+- A "Voice connected" panel in the sidebar with mute, deafen, and disconnect controls, plus a live microphone level meter.
+- Joining a voice room requests real microphone access; mute and deafen turn the live mic track off.
 
 ### Google Meet
 - Server voice rooms use a Google Meet style stage: participants in a tile grid, working mic/camera/screen-share/hand-raise controls, call timer, and a copyable meeting code.
+- The controls drive real browser media: your camera stream shows in your tile, a shared screen streams live into the presenting tile, and your tile gets a green speaking ring while the mic hears you.
 - Server voice rooms open in a three panel layout: channels on the left, people in the meet in the middle, and chat on the right.
 
 ### Skype
 - Private and group chat calls use a Skype style call view with a main stage, self view corner, quality bars, round controls, and screen sharing.
+- The self view corner renders your real camera feed, and the round controls toggle the live mic, camera, and screen share.
 
 ### Microsoft Teams
 - Calendar panel to schedule meetings and join them from the right hand utility rail.
@@ -55,6 +58,14 @@ Borrowed from the apps this project mashes together:
 
 ### Presence
 - Change your own status (online, idle, do not disturb, invisible) from the account menu.
+
+## Calls and media
+
+- Microphone, camera, and screen capture use real browser APIs (`getUserMedia` / `getDisplayMedia`), so permission prompts appear when you join a voice room, start a call, or turn the camera on.
+- If access is blocked or no device exists, the call panel shows a warning banner instead of pretending to be connected.
+- Mute, camera, and screen-share buttons toggle the actual media tracks, and the self view and present tiles render the live streams.
+- All tracks (mic, camera, screen) are stopped when you leave a call, leave voice, log out, or reset local data, so the camera light goes off.
+- Remote audio and video between two devices still needs a real backend; this build captures and renders your own media locally.
 
 ## Authentication
 

@@ -3,17 +3,27 @@ import {
   MicOff,
   MonitorUp,
   PhoneOff,
+  TriangleAlert,
   Video,
   VideoOff,
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import type { User } from "../../types";
+import { StreamVideo } from "./StreamVideo";
 
 interface SkypeCallPanelProps {
   title: string;
   kind: "voice" | "video";
   participants: User[];
   currentUserId: string;
+  muted: boolean;
+  cameraOn: boolean;
+  sharing: boolean;
+  mediaError: string | null;
+  cameraStream: MediaStream | null;
+  onToggleMute: () => void;
+  onToggleCamera: () => void;
+  onToggleScreen: () => void;
   onEnd: () => void;
 }
 
@@ -23,10 +33,21 @@ const formatDuration = (totalSeconds: number) => {
   return `${minutes}:${seconds}`;
 };
 
-export function SkypeCallPanel({ title, kind, participants, currentUserId, onEnd }: SkypeCallPanelProps) {
-  const [micOn, setMicOn] = useState(true);
-  const [cameraOn, setCameraOn] = useState(kind === "video");
-  const [sharing, setSharing] = useState(false);
+export function SkypeCallPanel({
+  title,
+  kind,
+  participants,
+  currentUserId,
+  muted,
+  cameraOn,
+  sharing,
+  mediaError,
+  cameraStream,
+  onToggleMute,
+  onToggleCamera,
+  onToggleScreen,
+  onEnd,
+}: SkypeCallPanelProps) {
   const [elapsed, setElapsed] = useState(0);
 
   useEffect(() => {
@@ -37,6 +58,7 @@ export function SkypeCallPanel({ title, kind, participants, currentUserId, onEnd
   const me = participants.find((user) => user.id === currentUserId);
   const others = participants.filter((user) => user.id !== currentUserId);
   const primary = others[0];
+  const cameraLive = cameraOn && Boolean(cameraStream);
 
   return (
     <section className="call-panel skype-panel" aria-labelledby="skype-call-heading">
@@ -76,10 +98,14 @@ export function SkypeCallPanel({ title, kind, participants, currentUserId, onEnd
         <div className="skype-self" aria-label="Your self view">
           {me && (
             <>
-              <span className="avatar skype-self-avatar" aria-hidden="true">
-                {me.fullName.charAt(0).toUpperCase()}
-              </span>
-              <span className="skype-self-label">You{cameraOn ? "" : " (camera off)"}</span>
+              {cameraLive ? (
+                <StreamVideo stream={cameraStream} className="skype-self-video" label="Your camera" />
+              ) : (
+                <span className="avatar skype-self-avatar" aria-hidden="true">
+                  {me.fullName.charAt(0).toUpperCase()}
+                </span>
+              )}
+              <span className="skype-self-label">You{cameraLive ? "" : " (camera off)"}</span>
             </>
           )}
         </div>
@@ -92,22 +118,29 @@ export function SkypeCallPanel({ title, kind, participants, currentUserId, onEnd
         )}
       </div>
 
+      {mediaError && (
+        <p className="media-warning" role="alert">
+          <TriangleAlert aria-hidden="true" size={15} />
+          {mediaError}
+        </p>
+      )}
+
       <div className="skype-controls" aria-label="Call controls">
         <button
           type="button"
-          className={`skype-round ${micOn ? "" : "off"}`}
-          aria-label={micOn ? "Mute microphone" : "Unmute microphone"}
-          aria-pressed={!micOn}
-          onClick={() => setMicOn((value) => !value)}
+          className={`skype-round ${muted ? "off" : ""}`}
+          aria-label={muted ? "Unmute microphone" : "Mute microphone"}
+          aria-pressed={!muted}
+          onClick={onToggleMute}
         >
-          {micOn ? <Mic aria-hidden="true" size={20} /> : <MicOff aria-hidden="true" size={20} />}
+          {muted ? <MicOff aria-hidden="true" size={20} /> : <Mic aria-hidden="true" size={20} />}
         </button>
         <button
           type="button"
           className={`skype-round ${cameraOn ? "" : "off"}`}
           aria-label={cameraOn ? "Turn camera off" : "Turn camera on"}
           aria-pressed={!cameraOn}
-          onClick={() => setCameraOn((value) => !value)}
+          onClick={onToggleCamera}
         >
           {cameraOn ? <Video aria-hidden="true" size={20} /> : <VideoOff aria-hidden="true" size={20} />}
         </button>
@@ -116,7 +149,7 @@ export function SkypeCallPanel({ title, kind, participants, currentUserId, onEnd
           className={`skype-round ${sharing ? "active" : ""}`}
           aria-label={sharing ? "Stop sharing screen" : "Share screen"}
           aria-pressed={sharing}
-          onClick={() => setSharing((value) => !value)}
+          onClick={onToggleScreen}
         >
           <MonitorUp aria-hidden="true" size={20} />
         </button>

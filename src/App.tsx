@@ -15,6 +15,7 @@ import { RightSidebar } from "./components/utilities/RightSidebar";
 import type { NotificationItem } from "./components/utilities/RightSidebar";
 import { localStore, replyPayload } from "./data/localStore";
 import type { AuthResult } from "./data/localStore";
+import { mediaStore } from "./data/media";
 import { useGlobalShortcuts } from "./hooks/useGlobalShortcuts";
 import type { ChatTarget, Conversation, Message, PresenceStatus, User } from "./types";
 import { summarizeUnread, targetKey } from "./utils/chat";
@@ -48,6 +49,15 @@ function App() {
     localStore.snapshot,
     localStore.snapshot,
   );
+  const media = useSyncExternalStore(
+    mediaStore.subscribe,
+    mediaStore.getSnapshot,
+    mediaStore.getSnapshot,
+  );
+
+  useEffect(() => {
+    mediaStore.setMicEnabled(!snapshot.voice.muted && !snapshot.voice.deafened);
+  }, [snapshot.voice.muted, snapshot.voice.deafened]);
   const currentUser =
     snapshot.users.find((user) => user.id === snapshot.currentUserId) ?? null;
   const servers = currentUser
@@ -212,6 +222,12 @@ function App() {
   }, [activeChannelId, activeConversationId, call, showFriends, inVoiceRoom]);
 
   const clearCallContext = () => {
+    if (call) {
+      mediaStore.releaseAll();
+      if (snapshot.voice.channelId) {
+        void mediaStore.ensureMic();
+      }
+    }
     setCall(null);
     setReplyTarget(null);
     setShowMembers(false);
@@ -265,6 +281,7 @@ function App() {
 
     const channel = snapshot.channels.find((item) => item.id === channelId);
     localStore.joinVoice(channelId, currentUser.id);
+    void mediaStore.ensureMic();
     setAnnouncement(`Joined voice room ${channel?.name ?? ""}.`);
     clearCallContext();
     setShowFriends(false);
@@ -368,6 +385,10 @@ function App() {
       kind,
       participants,
     });
+    void mediaStore.ensureMic();
+    if (kind === "video") {
+      void mediaStore.ensureCamera();
+    }
     setAnnouncement(`Started ${kind} call with ${chatTitle}.`);
   };
 
@@ -378,6 +399,8 @@ function App() {
     setActiveChannelId(null);
     setReplyTarget(null);
     setCall({ title, kind: "video", participants: callParticipants });
+    void mediaStore.ensureMic();
+    void mediaStore.ensureCamera();
     setAnnouncement(`Joined meeting: ${title}.`);
   };
 
@@ -402,8 +425,29 @@ function App() {
     setAnnouncement(`Status set to ${status}.`);
   };
 
+  const toggleVoiceMute = () => {
+    localStore.setVoiceSetting({ muted: !snapshot.voice.muted });
+  };
+
+  const toggleVoiceDeafen = () => {
+    localStore.setVoiceSetting({ deafened: !snapshot.voice.deafened });
+  };
+
+  const toggleMediaMute = () => {
+    void mediaStore.toggleMic();
+  };
+
+  const toggleCamera = () => {
+    void mediaStore.toggleCamera();
+  };
+
+  const toggleScreen = () => {
+    mediaStore.toggleScreen();
+  };
+
   const resetLocalData = () => {
     localStore.resetLocalData();
+    mediaStore.releaseAll();
     const state = localStore.snapshot();
     setActiveServerId(null);
     setActiveChannelId(null);
@@ -443,6 +487,7 @@ function App() {
 
   const handleLogout = () => {
     localStore.logout();
+    mediaStore.releaseAll();
     setActiveServerId(null);
     setActiveChannelId(null);
     setActiveConversationId(null);
@@ -525,15 +570,17 @@ function App() {
               setInviteServerId(activeServer.id);
             }
           }}
+          micLevel={media.level}
           onStatusChange={setPresence}
           onLogout={handleLogout}
           onJoinVoice={joinVoice}
           onLeaveVoice={() => {
             localStore.leaveVoice();
+            mediaStore.releaseAll();
             setAnnouncement("Left the voice room.");
           }}
-          onToggleMute={() => localStore.setVoiceSetting({ muted: !snapshot.voice.muted })}
-          onToggleDeafen={() => localStore.setVoiceSetting({ deafened: !snapshot.voice.deafened })}
+          onToggleMute={toggleVoiceMute}
+          onToggleDeafen={toggleVoiceDeafen}
         />
 
         <main
@@ -549,8 +596,20 @@ function App() {
               kind={call.kind}
               participants={call.participants}
               currentUserId={currentUser.id}
+              muted={!media.micEnabled}
+              cameraOn={media.cameraEnabled}
+              sharing={media.screen === "live"}
+              mediaError={media.error}
+              cameraStream={mediaStore.getCameraStream()}
+              onToggleMute={toggleMediaMute}
+              onToggleCamera={toggleCamera}
+              onToggleScreen={toggleScreen}
               onEnd={() => {
                 setCall(null);
+                mediaStore.releaseAll();
+                if (snapshot.voice.channelId) {
+                  void mediaStore.ensureMic();
+                }
                 setAnnouncement("Call ended.");
               }}
             />
@@ -572,8 +631,19 @@ function App() {
                   kind="video"
                   participants={voiceUsers}
                   currentUserId={currentUser.id}
+                  muted={!media.micEnabled}
+                  cameraOn={media.cameraEnabled}
+                  sharing={media.screen === "live"}
+                  speaking={media.speaking}
+                  mediaError={media.error}
+                  cameraStream={mediaStore.getCameraStream()}
+                  screenStream={mediaStore.getScreenStream()}
+                  onToggleMute={toggleVoiceMute}
+                  onToggleCamera={toggleCamera}
+                  onToggleScreen={toggleScreen}
                   onEnd={() => {
                     localStore.leaveVoice();
+                    mediaStore.releaseAll();
                     setAnnouncement("Left the voice room.");
                   }}
                 />
