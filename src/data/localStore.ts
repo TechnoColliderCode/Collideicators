@@ -7,9 +7,14 @@ import type {
   Friend,
   Message,
   MessageKind,
+  Meeting,
+  PresenceStatus,
+  ReplyRef,
   Server,
   User,
+  VoiceSession,
 } from "../types";
+import { extractMentions } from "../utils/chat";
 
 const STORAGE_KEY = "gsc_state_v1";
 
@@ -17,6 +22,13 @@ const now = () => new Date().toISOString();
 
 const createId = (prefix: string) =>
   `${prefix}_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
+
+const emptyVoice = (): VoiceSession => ({
+  channelId: null,
+  participantIds: [],
+  muted: false,
+  deafened: false,
+});
 
 const seedState = (): AppState => {
   const users: User[] = [
@@ -79,6 +91,9 @@ const seedState = (): AppState => {
       fileUrl: "",
       conversationId: conversations[0].id,
       createdAt: new Date(Date.now() - 1000 * 60 * 4).toISOString(),
+      reactions: [{ emoji: "👍", userId: users[0].id }],
+      pinned: false,
+      replyTo: null,
     },
     {
       id: "message_seed_2",
@@ -89,16 +104,40 @@ const seedState = (): AppState => {
       fileUrl: "",
       conversationId: conversations[0].id,
       createdAt: conversations[0].lastMessageTime ?? now(),
+      reactions: [],
+      pinned: false,
+      replyTo: {
+        messageId: "message_seed_1",
+        senderName: users[1].fullName,
+        content: "Welcome. This version is running as a local TypeScript app.",
+      },
     },
     {
       id: "message_seed_3",
-      content: "The general channel is seeded too.",
+      content: "The general channel is seeded too. Pin messages with the pin action.",
       senderId: users[2].id,
       senderName: users[2].fullName,
       type: "text",
       fileUrl: "",
       channelId: channels[0].id,
       createdAt: new Date(Date.now() - 1000 * 60 * 2).toISOString(),
+      reactions: [],
+      pinned: true,
+      replyTo: null,
+    },
+    {
+      id: "message_seed_4",
+      content: "@Alex can you take a look at the new mockups?",
+      senderId: users[2].id,
+      senderName: users[2].fullName,
+      type: "text",
+      fileUrl: "",
+      channelId: channels[0].id,
+      createdAt: new Date(Date.now() - 1000 * 60).toISOString(),
+      reactions: [],
+      pinned: false,
+      replyTo: null,
+      mentions: [users[0].id],
     },
   ];
 
@@ -121,7 +160,61 @@ const seedState = (): AppState => {
     },
   ];
 
-  return { users, servers, channels, conversations, messages, friends };
+  const meetings: Meeting[] = [
+    {
+      id: "meeting_standup",
+      title: "Galaxia standup",
+      startsAt: new Date(Date.now() + 1000 * 60 * 60 * 2).toISOString(),
+      hostId: users[0].id,
+      participantIds: [users[0].id, users[1].id, users[2].id],
+    },
+    {
+      id: "meeting_design",
+      title: "Design review",
+      startsAt: new Date(Date.now() + 1000 * 60 * 60 * 26).toISOString(),
+      hostId: users[1].id,
+      participantIds: [users[0].id, users[1].id],
+    },
+  ];
+
+  return {
+    users,
+    servers,
+    channels,
+    conversations,
+    messages,
+    friends,
+    lastRead: {},
+    voice: emptyVoice(),
+    meetings,
+    typing: {},
+  };
+};
+
+const normalizeState = (parsed: Partial<AppState>): AppState => {
+  const seeded = seedState();
+  const users = parsed.users ?? seeded.users;
+
+  return {
+    users,
+    servers: parsed.servers ?? seeded.servers,
+    channels: parsed.channels ?? seeded.channels,
+    conversations: parsed.conversations ?? seeded.conversations,
+    messages: (parsed.messages ?? seeded.messages).map((message) => ({
+      ...message,
+      reactions: message.reactions ?? [],
+      pinned: message.pinned ?? false,
+      replyTo: message.replyTo ?? null,
+      mentions: message.mentions ?? [],
+      editedAt: message.editedAt ?? null,
+      unsent: message.unsent ?? false,
+    })),
+    friends: parsed.friends ?? seeded.friends,
+    lastRead: parsed.lastRead ?? {},
+    voice: parsed.voice ?? emptyVoice(),
+    meetings: parsed.meetings ?? seeded.meetings,
+    typing: {},
+  };
 };
 
 let listeners: Array<() => void> = [];
@@ -140,7 +233,7 @@ const readState = (): AppState => {
   }
 
   try {
-    cachedState = JSON.parse(stored) as AppState;
+    cachedState = normalizeState(JSON.parse(stored) as Partial<AppState>);
     return cachedState;
   } catch {
     const seeded = seedState();
@@ -151,7 +244,7 @@ const readState = (): AppState => {
 
 const writeState = (state: AppState, notify = true) => {
   cachedState = state;
-  window.localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+  window.localStorage.setItem(STORAGE_KEY, JSON.stringify({ ...state, typing: {} }));
   if (notify) {
     listeners.forEach((listener) => listener());
   }
@@ -159,6 +252,20 @@ const writeState = (state: AppState, notify = true) => {
 
 const sortByCreatedAt = (messages: Message[]) =>
   [...messages].sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+
+const requireMessage = (state: AppState, messageId: string) => {
+  const message = state.messages.find((item) => item.id === messageId);
+  if (!message) {
+    throw new Error("Could not find that message.");
+  }
+  return message;
+};
+
+const replyPayload = (message: Message): ReplyRef => ({
+  messageId: message.id,
+  senderName: message.senderName,
+  content: message.unsent ? "Message unsent" : message.content,
+});
 
 export const localStore = {
   currentUserId: "user_alex",
@@ -219,7 +326,14 @@ export const localStore = {
     return sortByCreatedAt(messages);
   },
 
-  sendMessage(target: ChatTarget, sender: User, content: string, type: MessageKind = "text", fileUrl = "") {
+  sendMessage(
+    target: ChatTarget,
+    sender: User,
+    content: string,
+    type: MessageKind = "text",
+    fileUrl = "",
+    replyTo?: ReplyRef | null,
+  ) {
     const trimmed = content.trim();
     if (!trimmed) {
       throw new Error("Message content is required.");
@@ -234,6 +348,12 @@ export const localStore = {
       type,
       fileUrl,
       createdAt: now(),
+      reactions: [],
+      pinned: false,
+      replyTo: replyTo ?? null,
+      editedAt: null,
+      unsent: false,
+      mentions: extractMentions(trimmed, state.users),
       ...(target.kind === "channel" ? { channelId: target.id } : { conversationId: target.id }),
     };
 
@@ -252,6 +372,162 @@ export const localStore = {
 
     writeState({ ...state, messages: [...state.messages, message], conversations });
     return message;
+  },
+
+  toggleReaction(messageId: string, userId: string, emoji: string) {
+    const state = readState();
+    const message = requireMessage(state, messageId);
+    const hasReaction = message.reactions.some(
+      (reaction) => reaction.emoji === emoji && reaction.userId === userId,
+    );
+
+    const reactions = hasReaction
+      ? message.reactions.filter(
+          (reaction) => !(reaction.emoji === emoji && reaction.userId === userId),
+        )
+      : [...message.reactions.filter((reaction) => reaction.userId !== userId), { emoji, userId }];
+
+    writeState({
+      ...state,
+      messages: state.messages.map((item) =>
+        item.id === messageId ? { ...item, reactions } : item,
+      ),
+    });
+  },
+
+  togglePin(messageId: string) {
+    const state = readState();
+    const message = requireMessage(state, messageId);
+    writeState({
+      ...state,
+      messages: state.messages.map((item) =>
+        item.id === messageId ? { ...item, pinned: !message.pinned } : item,
+      ),
+    });
+  },
+
+  editMessage(messageId: string, editor: User, content: string) {
+    const trimmed = content.trim();
+    if (!trimmed) {
+      throw new Error("Message content is required.");
+    }
+
+    const state = readState();
+    const message = requireMessage(state, messageId);
+    if (message.senderId !== editor.id) {
+      throw new Error("You can only edit your own messages.");
+    }
+
+    writeState({
+      ...state,
+      messages: state.messages.map((item) =>
+        item.id === messageId
+          ? {
+              ...item,
+              content: trimmed,
+              editedAt: now(),
+              mentions: extractMentions(trimmed, state.users),
+            }
+          : item,
+      ),
+    });
+  },
+
+  unsendMessage(messageId: string, requester: User) {
+    const state = readState();
+    const message = requireMessage(state, messageId);
+    if (message.senderId !== requester.id) {
+      throw new Error("You can only unsend your own messages.");
+    }
+
+    writeState({
+      ...state,
+      messages: state.messages.map((item) =>
+        item.id === messageId
+          ? { ...item, unsent: true, reactions: [], editedAt: null }
+          : item,
+      ),
+    });
+  },
+
+  markRead(key: string) {
+    const state = readState();
+    writeState({ ...state, lastRead: { ...state.lastRead, [key]: now() } });
+  },
+
+  setTyping(key: string, userId: string | null) {
+    const state = readState();
+    const typing = { ...state.typing };
+    if (userId) {
+      typing[key] = userId;
+    } else {
+      delete typing[key];
+    }
+    writeState({ ...state, typing });
+  },
+
+  updateUserStatus(userId: string, status: PresenceStatus) {
+    const state = readState();
+    writeState({
+      ...state,
+      users: state.users.map((user) => (user.id === userId ? { ...user, status } : user)),
+    });
+  },
+
+  joinVoice(channelId: string, userId: string) {
+    const state = readState();
+    const participantIds = state.voice.channelId === channelId
+      ? state.voice.participantIds
+      : [userId];
+
+    writeState({
+      ...state,
+      voice: { ...state.voice, channelId, participantIds },
+    });
+  },
+
+  leaveVoice() {
+    const state = readState();
+    writeState({ ...state, voice: emptyVoice() });
+  },
+
+  addVoiceParticipant(userId: string) {
+    const state = readState();
+    if (!state.voice.channelId || state.voice.participantIds.includes(userId)) {
+      return;
+    }
+    writeState({
+      ...state,
+      voice: {
+        ...state.voice,
+        participantIds: [...state.voice.participantIds, userId],
+      },
+    });
+  },
+
+  setVoiceSetting(patch: Partial<Pick<VoiceSession, "muted" | "deafened">>) {
+    const state = readState();
+    writeState({ ...state, voice: { ...state.voice, ...patch } });
+  },
+
+  createMeeting(host: User, title: string, startsAt: string, participantIds: string[]) {
+    const state = readState();
+    const meeting: Meeting = {
+      id: createId("meeting"),
+      title: title.trim() || "Quick meeting",
+      startsAt,
+      hostId: host.id,
+      participantIds: participantIds.includes(host.id)
+        ? participantIds
+        : [host.id, ...participantIds],
+    };
+    writeState({ ...state, meetings: [...state.meetings, meeting] });
+    return meeting;
+  },
+
+  deleteMeeting(meetingId: string) {
+    const state = readState();
+    writeState({ ...state, meetings: state.meetings.filter((item) => item.id !== meetingId) });
   },
 
   createServer(owner: User, name: string) {
@@ -366,3 +642,5 @@ export const localStore = {
     writeState({ ...state, friends: state.friends.filter((friend) => friend.id !== friendId) });
   },
 };
+
+export { replyPayload };

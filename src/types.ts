@@ -8,6 +8,8 @@ export type ConversationKind = "direct" | "group";
 
 export type FriendStatus = "pending" | "accepted" | "declined";
 
+export type MessageStatus = "sent" | "delivered" | "read";
+
 export interface User {
   id: string;
   fullName: string;
@@ -43,6 +45,17 @@ export interface Conversation {
   lastMessageTime: string | null;
 }
 
+export interface ReplyRef {
+  messageId: string;
+  senderName: string;
+  content: string;
+}
+
+export interface Reaction {
+  emoji: string;
+  userId: string;
+}
+
 export interface Message {
   id: string;
   content: string;
@@ -53,6 +66,12 @@ export interface Message {
   channelId?: string;
   conversationId?: string;
   createdAt: string;
+  replyTo?: ReplyRef | null;
+  reactions: Reaction[];
+  pinned: boolean;
+  editedAt?: string | null;
+  unsent?: boolean;
+  mentions?: string[];
 }
 
 export interface Friend {
@@ -62,6 +81,21 @@ export interface Friend {
   targetId: string;
   targetName: string;
   status: FriendStatus;
+}
+
+export interface VoiceSession {
+  channelId: string | null;
+  participantIds: string[];
+  muted: boolean;
+  deafened: boolean;
+}
+
+export interface Meeting {
+  id: string;
+  title: string;
+  startsAt: string;
+  hostId: string;
+  participantIds: string[];
 }
 
 export interface ChatTarget {
@@ -76,4 +110,8 @@ export interface AppState {
   conversations: Conversation[];
   messages: Message[];
   friends: Friend[];
+  lastRead: Record<string, string>;
+  voice: VoiceSession;
+  meetings: Meeting[];
+  typing: Record<string, string>;
 }

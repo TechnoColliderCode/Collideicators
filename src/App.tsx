@@ -1,16 +1,35 @@
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
-import { CallPlaceholder } from "./components/calls/CallPlaceholder";
+import { CallPanel } from "./components/calls/CallPanel";
+import { SkypeCallPanel } from "./components/calls/SkypeCallPanel";
 import { MessageArea } from "./components/chat/MessageArea";
 import { FriendsView } from "./components/friends/FriendsView";
 import { ChatSidebar } from "./components/layout/ChatSidebar";
+import { MembersPanel } from "./components/layout/MembersPanel";
 import { ServerBar } from "./components/layout/ServerBar";
 import { CreateServerModal } from "./components/modals/CreateServerModal";
 import { NewChatModal } from "./components/modals/NewChatModal";
 import { RightSidebar } from "./components/utilities/RightSidebar";
-import { localStore } from "./data/localStore";
+import type { NotificationItem } from "./components/utilities/RightSidebar";
+import { localStore, replyPayload } from "./data/localStore";
 import { useGlobalShortcuts } from "./hooks/useGlobalShortcuts";
-import type { ChatTarget, Conversation, User } from "./types";
+import type { ChatTarget, Conversation, Message, PresenceStatus, User } from "./types";
+import { summarizeUnread, targetKey } from "./utils/chat";
 import { getConversationName } from "./utils/conversation";
+
+interface ActiveCall {
+  title: string;
+  kind: "voice" | "video";
+  participants: User[];
+}
+
+const PEER_REPLIES = [
+  "Got it 👍",
+  "Sounds good to me!",
+  "Nice, let me check and get back to you.",
+  "Haha, that made my day 😂",
+  "On my way.",
+  "Can you share a bit more detail @{name}?",
+];
 
 function App() {
   const [activeServerId, setActiveServerId] = useState<string | null>(null);
@@ -22,10 +41,14 @@ function App() {
   const [showCreateServer, setShowCreateServer] = useState(false);
   const [showNewChat, setShowNewChat] = useState(false);
   const [showFriends, setShowFriends] = useState(false);
+  const [showMembers, setShowMembers] = useState(false);
   const [rightTab, setRightTab] = useState<"notifications" | "calendar" | null>(null);
-  const [callTitle, setCallTitle] = useState<string | null>(null);
+  const [call, setCall] = useState<ActiveCall | null>(null);
+  const [replyTarget, setReplyTarget] = useState<Message | null>(null);
   const [announcement, setAnnouncement] = useState("");
   const mainRef = useRef<HTMLElement | null>(null);
+  const replyTimers = useRef<number[]>([]);
+  const activeTargetRef = useRef<ChatTarget | null>(null);
 
   const snapshot = useSyncExternalStore(
     localStore.subscribe,
@@ -59,6 +82,25 @@ function App() {
     return null;
   }, [activeChannel, activeConversation]);
 
+  const activeTargetKey = activeTarget ? targetKey(activeTarget) : null;
+
+  useEffect(() => {
+    activeTargetRef.current = activeTarget;
+  }, [activeTarget]);
+
+  useEffect(() => {
+    if (activeTargetKey) {
+      localStore.markRead(activeTargetKey);
+    }
+  }, [activeTargetKey]);
+
+  useEffect(
+    () => () => {
+      replyTimers.current.forEach((timer) => window.clearTimeout(timer));
+    },
+    [],
+  );
+
   const messages = useMemo(() => {
     if (!activeTarget) {
       return [];
@@ -87,6 +129,18 @@ function App() {
         ? "Direct message"
         : "";
 
+  const participants: User[] = useMemo(() => {
+    if (activeServer) {
+      return snapshot.users.filter((user) => activeServer.memberIds.includes(user.id));
+    }
+    if (activeConversation) {
+      return snapshot.users.filter((user) =>
+        activeConversation.participantIds.includes(user.id),
+      );
+    }
+    return [];
+  }, [activeServer, activeConversation, snapshot.users]);
+
   const filteredChannels = channels.filter((channel) =>
     channel.name.toLowerCase().includes(searchQuery.toLowerCase()),
   );
@@ -96,6 +150,66 @@ function App() {
       .toLowerCase()
       .includes(searchQuery.toLowerCase()),
   );
+
+  const unread: Record<string, { count: number; mentions: number }> = {};
+  if (currentUser) {
+    conversations.forEach((conversation) => {
+      unread[conversation.id] = summarizeUnread(
+        snapshot,
+        `conversation:${conversation.id}`,
+        currentUser.id,
+      );
+    });
+    channels.forEach((channel) => {
+      unread[channel.id] = summarizeUnread(snapshot, `channel:${channel.id}`, currentUser.id);
+    });
+  }
+
+  const voiceChannel = snapshot.channels.find((channel) => channel.id === snapshot.voice.channelId) ?? null;
+  const voiceServer = voiceChannel
+    ? snapshot.servers.find((server) => server.id === voiceChannel.serverId) ?? null
+    : null;
+  const voiceLabel =
+    voiceChannel && voiceServer ? `${voiceServer.name} / ${voiceChannel.name}` : null;
+  const inVoiceRoom = Boolean(
+    activeServer && voiceChannel && voiceChannel.serverId === activeServer.id,
+  );
+  const voiceUsers = snapshot.voice.participantIds
+    .map((id) => snapshot.users.find((user) => user.id === id))
+    .filter((user): user is User => Boolean(user));
+
+  const typingUserId = activeTargetKey ? snapshot.typing[activeTargetKey] : undefined;
+  const typingUser = typingUserId
+    ? snapshot.users.find((user) => user.id === typingUserId) ?? null
+    : null;
+  const typingUserName =
+    typingUser && typingUser.id !== currentUser?.id ? typingUser.fullName.split(" ")[0] : null;
+
+  const notifications: NotificationItem[] = currentUser
+    ? [
+        ...snapshot.friends
+          .filter((friend) => friend.status === "pending" && friend.targetId === currentUser.id)
+          .map((friend) => ({
+            id: friend.id,
+            title: "Friend request",
+            detail: `${friend.requesterName} wants to add you as a friend.`,
+          })),
+        ...snapshot.messages
+          .filter(
+            (message) =>
+              message.senderId !== currentUser.id &&
+              !message.unsent &&
+              (message.mentions ?? []).includes(currentUser.id),
+          )
+          .slice(-5)
+          .reverse()
+          .map((message) => ({
+            id: message.id,
+            title: `${message.senderName} mentioned you`,
+            detail: message.content,
+          })),
+      ]
+    : [];
 
   const focusTarget = (selector: string) => {
     const element = document.querySelector<HTMLElement>(selector);
@@ -112,15 +226,21 @@ function App() {
 
   useEffect(() => {
     mainRef.current?.focus();
-  }, [activeChannelId, activeConversationId, callTitle, showFriends]);
+  }, [activeChannelId, activeConversationId, call, showFriends, inVoiceRoom]);
+
+  const clearCallContext = () => {
+    setCall(null);
+    setReplyTarget(null);
+    setShowMembers(false);
+  };
 
   const selectServer = (serverId: string) => {
     const serverChannels = localStore.getChannels(serverId);
     setActiveServerId(serverId);
-    setActiveChannelId(serverChannels[0]?.id ?? null);
+    setActiveChannelId(serverChannels.find((channel) => channel.type === "text")?.id ?? null);
     setActiveConversationId(null);
     setShowFriends(false);
-    setCallTitle(null);
+    clearCallContext();
   };
 
   const goHome = () => {
@@ -128,7 +248,7 @@ function App() {
     setActiveChannelId(null);
     setActiveConversationId(conversations[0]?.id ?? null);
     setShowFriends(false);
-    setCallTitle(null);
+    clearCallContext();
   };
 
   const selectConversation = (conversationId: string) => {
@@ -136,17 +256,112 @@ function App() {
     setActiveServerId(null);
     setActiveChannelId(null);
     setShowFriends(false);
-    setCallTitle(null);
+    clearCallContext();
   };
 
   const selectChannel = (channelId: string) => {
+    const channel = snapshot.channels.find((item) => item.id === channelId);
+    if (channel?.type === "voice") {
+      joinVoice(channel.id);
+      return;
+    }
     setActiveChannelId(channelId);
     setActiveConversationId(null);
     setShowFriends(false);
-    setCallTitle(null);
+    clearCallContext();
   };
 
-  const sendMessage = (content: string, fileUrl = "") => {
+  const joinVoice = (channelId: string) => {
+    if (!currentUser) {
+      return;
+    }
+
+    if (snapshot.voice.channelId === channelId) {
+      localStore.leaveVoice();
+      setAnnouncement("Left the voice room.");
+      return;
+    }
+
+    const channel = snapshot.channels.find((item) => item.id === channelId);
+    localStore.joinVoice(channelId, currentUser.id);
+    setAnnouncement(`Joined voice room ${channel?.name ?? ""}.`);
+    clearCallContext();
+    setShowFriends(false);
+
+    if (channel) {
+      setActiveServerId(channel.serverId);
+      const serverChannels = localStore.getChannels(channel.serverId);
+      const hasOpenTextChannel =
+        activeChannelId !== null &&
+        serverChannels.some((item) => item.id === activeChannelId && item.type === "text");
+      if (!hasOpenTextChannel) {
+        setActiveChannelId(
+          serverChannels.find((item) => item.type === "text")?.id ?? null,
+        );
+        setActiveConversationId(null);
+      }
+    }
+
+    const timer = window.setTimeout(() => {
+      const state = localStore.snapshot();
+      const joinedChannel = state.channels.find((item) => item.id === channelId);
+      const server = state.servers.find((item) => item.id === joinedChannel?.serverId);
+      const candidate = state.users.find(
+        (user) =>
+          user.id !== currentUser.id &&
+          server?.memberIds.includes(user.id) &&
+          user.status === "online",
+      );
+      if (candidate && state.voice.channelId === channelId) {
+        localStore.addVoiceParticipant(candidate.id);
+      }
+    }, 2500);
+    replyTimers.current.push(timer);
+  };
+
+  const schedulePeerReply = (target: ChatTarget, sender: User) => {
+    if (target.kind !== "conversation") {
+      return;
+    }
+
+    const conversation = snapshot.conversations.find((item) => item.id === target.id);
+    if (!conversation || conversation.type !== "direct") {
+      return;
+    }
+
+    const other = snapshot.users.find(
+      (user) => user.id !== sender.id && conversation.participantIds.includes(user.id),
+    );
+    if (!other) {
+      return;
+    }
+
+    const key = targetKey(target);
+    localStore.setTyping(key, other.id);
+
+    const timer = window.setTimeout(() => {
+      localStore.setTyping(key, null);
+      const state = localStore.snapshot();
+      if (!state.conversations.some((item) => item.id === target.id)) {
+        return;
+      }
+      const template = PEER_REPLIES[Math.floor(Math.random() * PEER_REPLIES.length)];
+      localStore.sendMessage(
+        target,
+        other,
+        template.replace("{name}", sender.fullName.split(" ")[0]),
+        "text",
+        "",
+        null,
+      );
+      if (activeTargetRef.current && targetKey(activeTargetRef.current) === key) {
+        localStore.markRead(key);
+      }
+    }, 2200);
+    replyTimers.current.push(timer);
+  };
+
+  const sendMessage = (content: string, fileUrl = "", reply: Message | null = null) => {
     if (!currentUser || !activeTarget) {
       return;
     }
@@ -157,8 +372,11 @@ function App() {
       content,
       fileUrl ? "image" : "text",
       fileUrl,
+      reply ? replyPayload(reply) : null,
     );
+    setReplyTarget(null);
     setAnnouncement(`Sent message: ${message.content}`);
+    schedulePeerReply(activeTarget, currentUser);
   };
 
   const startDirectConversation = (otherUserId: string) => {
@@ -190,6 +408,65 @@ function App() {
     setActiveServerId(server.id);
     setActiveChannelId(newChannels[0]?.id ?? null);
     setActiveConversationId(null);
+    clearCallContext();
+  };
+
+  const startChatCall = (kind: "voice" | "video") => {
+    if (!chatTitle) {
+      return;
+    }
+
+    if (activeServer) {
+      const voiceChannelToJoin = channels.find((channel) => channel.type === "voice");
+      if (voiceChannelToJoin && snapshot.voice.channelId !== voiceChannelToJoin.id) {
+        joinVoice(voiceChannelToJoin.id);
+      }
+      return;
+    }
+
+    if (!activeConversation) {
+      return;
+    }
+
+    setReplyTarget(null);
+    setShowFriends(false);
+    setCall({
+      title: getConversationName(activeConversation, currentUser?.id ?? ""),
+      kind,
+      participants,
+    });
+    setAnnouncement(`Started ${kind} call with ${chatTitle}.`);
+  };
+
+  const joinMeeting = (title: string, participantIds: string[]) => {
+    const callParticipants = snapshot.users.filter((user) => participantIds.includes(user.id));
+    setShowFriends(false);
+    setActiveServerId(null);
+    setActiveChannelId(null);
+    setReplyTarget(null);
+    setCall({ title, kind: "video", participants: callParticipants });
+    setAnnouncement(`Joined meeting: ${title}.`);
+  };
+
+  const createMeeting = (title: string, startsAt: string) => {
+    if (!currentUser) {
+      return;
+    }
+    const participantIds = snapshot.friends
+      .filter((friend) => friend.status === "accepted")
+      .map((friend) =>
+        friend.requesterId === currentUser.id ? friend.targetId : friend.requesterId,
+      );
+    localStore.createMeeting(currentUser, title, startsAt, participantIds);
+    setAnnouncement(`Meeting scheduled: ${title}.`);
+  };
+
+  const setPresence = (status: PresenceStatus) => {
+    if (!currentUser) {
+      return;
+    }
+    localStore.updateUserStatus(currentUser.id, status);
+    setAnnouncement(`Status set to ${status}.`);
   };
 
   const resetDemoData = () => {
@@ -198,7 +475,9 @@ function App() {
     setActiveChannelId(null);
     setActiveConversationId("conversation_alex_jordan");
     setShowFriends(false);
-    setCallTitle(null);
+    setShowMembers(false);
+    setCall(null);
+    setReplyTarget(null);
     setAnnouncement("Demo data reset.");
   };
 
@@ -213,6 +492,8 @@ function App() {
       </main>
     );
   }
+
+  const showMembersPanel = showMembers && Boolean(activeServer) && !call && !inVoiceRoom;
 
   return (
     <div className="app-shell">
@@ -245,6 +526,9 @@ function App() {
           searchQuery={searchQuery}
           serverName={activeServer?.name ?? ""}
           showFriends={showFriends}
+          unread={unread}
+          voice={snapshot.voice}
+          voiceLabel={voiceLabel}
           onSearchChange={setSearchQuery}
           onSelectConversation={selectConversation}
           onSelectChannel={selectChannel}
@@ -252,9 +536,17 @@ function App() {
             setShowFriends(true);
             setActiveConversationId(null);
             setActiveChannelId(null);
-            setCallTitle(null);
+            clearCallContext();
           }}
           onNewChat={() => setShowNewChat(true)}
+          onStatusChange={setPresence}
+          onJoinVoice={joinVoice}
+          onLeaveVoice={() => {
+            localStore.leaveVoice();
+            setAnnouncement("Left the voice room.");
+          }}
+          onToggleMute={() => localStore.setVoiceSetting({ muted: !snapshot.voice.muted })}
+          onToggleDeafen={() => localStore.setVoiceSetting({ deafened: !snapshot.voice.deafened })}
         />
 
         <main
@@ -264,8 +556,17 @@ function App() {
           tabIndex={-1}
           aria-describedby="keyboard-shortcuts"
         >
-          {callTitle ? (
-            <CallPlaceholder title={callTitle} onEnd={() => setCallTitle(null)} />
+          {call ? (
+            <SkypeCallPanel
+              title={call.title}
+              kind={call.kind}
+              participants={call.participants}
+              currentUserId={currentUser.id}
+              onEnd={() => {
+                setCall(null);
+                setAnnouncement("Call ended.");
+              }}
+            />
           ) : showFriends ? (
             <FriendsView
               users={snapshot.users}
@@ -276,22 +577,93 @@ function App() {
               onAcceptFriend={(friendId) => localStore.updateFriendStatus(friendId, "accepted")}
               onDeleteFriend={(friendId) => localStore.deleteFriend(friendId)}
             />
+          ) : inVoiceRoom && activeServer && voiceChannel ? (
+            <div className="voice-room-layout">
+              <section className="voice-room-stage" aria-label={`${activeServer.name} voice room`}>
+                <CallPanel
+                  title={`${activeServer.name} · ${voiceChannel.name}`}
+                  kind="video"
+                  participants={voiceUsers}
+                  currentUserId={currentUser.id}
+                  onEnd={() => {
+                    localStore.leaveVoice();
+                    setAnnouncement("Left the voice room.");
+                  }}
+                />
+              </section>
+              <aside className="voice-room-chat" aria-label="Voice room chat">
+                <MessageArea
+                  messages={messages}
+                  currentUserId={currentUser.id}
+                  chatTitle={chatTitle}
+                  chatSubtitle={chatSubtitle}
+                  participants={participants}
+                  replyTo={replyTarget}
+                  typingUserName={typingUserName}
+                  showStatus={activeConversation?.type === "direct"}
+                  onSendMessage={sendMessage}
+                  onCancelReply={() => setReplyTarget(null)}
+                  onReply={setReplyTarget}
+                  onReact={(messageId, emoji) =>
+                    localStore.toggleReaction(messageId, currentUser.id, emoji)
+                  }
+                  onTogglePin={(messageId) => localStore.togglePin(messageId)}
+                  onEdit={(messageId, content) =>
+                    localStore.editMessage(messageId, currentUser, content)
+                  }
+                  onDelete={(messageId) => localStore.unsendMessage(messageId, currentUser)}
+                  onStartVoiceCall={() => startChatCall("voice")}
+                  onStartVideoCall={() => startChatCall("video")}
+                />
+              </aside>
+            </div>
           ) : (
             <MessageArea
               messages={messages}
               currentUserId={currentUser.id}
               chatTitle={chatTitle}
               chatSubtitle={chatSubtitle}
+              participants={participants}
+              replyTo={replyTarget}
+              typingUserName={typingUserName}
+              showStatus={activeConversation?.type === "direct"}
               onSendMessage={sendMessage}
-              onStartVoiceCall={() => chatTitle && setCallTitle(chatTitle)}
+              onCancelReply={() => setReplyTarget(null)}
+              onReply={setReplyTarget}
+              onReact={(messageId, emoji) =>
+                localStore.toggleReaction(messageId, currentUser.id, emoji)
+              }
+              onTogglePin={(messageId) => localStore.togglePin(messageId)}
+              onEdit={(messageId, content) =>
+                localStore.editMessage(messageId, currentUser, content)
+              }
+              onDelete={(messageId) => localStore.unsendMessage(messageId, currentUser)}
+              onStartVoiceCall={() => startChatCall("voice")}
+              onStartVideoCall={() => startChatCall("video")}
+              membersOpen={showMembers}
+              onToggleMembers={() => setShowMembers((open) => !open)}
+            />
+          )}
+
+          {showMembersPanel && activeServer && (
+            <MembersPanel
+              serverName={activeServer.name}
+              members={snapshot.users.filter((user) => activeServer.memberIds.includes(user.id))}
+              ownerId={activeServer.ownerId}
+              voiceParticipantIds={snapshot.voice.participantIds}
+              onClose={() => setShowMembers(false)}
             />
           )}
         </main>
 
         <RightSidebar
           activeTab={rightTab}
-          unreadCount={2}
+          notifications={notifications}
+          meetings={snapshot.meetings}
           onChangeTab={setRightTab}
+          onCreateMeeting={createMeeting}
+          onJoinMeeting={(meeting) => joinMeeting(meeting.title, meeting.participantIds)}
+          onDeleteMeeting={(meetingId) => localStore.deleteMeeting(meetingId)}
         />
       </div>
 
